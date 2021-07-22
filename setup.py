@@ -1,7 +1,7 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 from setuptools import setup
 
-entry_points = {'console_scripts': ['aperoll=aperoll.scripts.aperoll:main']}
+entry_points = {'console_scripts': ['aperoll=aperoll.scripts.aperoll_main:main']}
 
 setup(name='aperoll',
       author='Javier Gonzalez',
