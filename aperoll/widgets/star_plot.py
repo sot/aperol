@@ -98,8 +98,8 @@ class StarView(QtW.QGraphicsView):
     def drawForeground(self, painter, rect):
         black_pen = QtG.QPen()
         black_pen.setWidth(2)
-        b1hw = 512.
-        center = QtC.QPoint(self.viewport().width() / 2, self.viewport().height() / 2)
+        b1hw = 512
+        center = QtC.QPoint(self.viewport().width() // 2, self.viewport().height() // 2)
         center = self.mapToScene(center)
 
         transform = self.viewportTransform()
@@ -110,19 +110,21 @@ class StarView(QtW.QGraphicsView):
         painter.rotate(-angle)
         painter.translate(-center)
 
-        painter.drawRect(center.x() - b1hw, center.y() - b1hw, 2 * b1hw, 2 * b1hw)
+        center_x = int(center.x())
+        center_y = int(center.y())
+        painter.drawRect(center_x - b1hw, center_y - b1hw, 2 * b1hw, 2 * b1hw)
         b2w = 520
-        painter.drawRect(center.x() - b2w, center.y() - b1hw, 2 * b2w, 2 * b1hw)
+        painter.drawRect(center_x - b2w, center_y - b1hw, 2 * b2w, 2 * b1hw)
 
         painter.setPen(QtG.QPen(QtG.QColor('magenta')))
-        painter.drawLine(center.x() - 511, center.y(), center.x() + 511, center.y())
-        painter.drawLine(center.x(), center.y() - 511, center.x(), center.y() + 511)
+        painter.drawLine(center_x - 511, center_y, center_x + 511, center_y)
+        painter.drawLine(center_x, center_y - 511, center_x, center_y + 511)
 
     def get_origin_offset(self):
         """
         Get the translation offset (in pixels) of the current view from (511, 511)
         """
-        center = QtC.QPoint(self.viewport().width() / 2, self.viewport().height() / 2)
+        center = QtC.QPoint(self.viewport().width() // 2, self.viewport().height() // 2)
         center = self.mapToScene(center)
         return center.x(), center.y()
 
@@ -254,7 +256,7 @@ class StarPlot(QtW.QWidget):
         red_pen = QtG.QPen(QtG.QColor("red"))
         red_brush = QtG.QBrush(QtG.QColor("red"))
         for star in self.stars:
-            s = symsize(star['MAG'])
+            s = symsize(star['MAG_ACA'])
             rect = QtC.QRectF(star['row'] - s / 2, -star['col'] - s / 2, s, s)
             if self._highlight is not None and star['AGASC_ID'] in self._highlight:
                 self.scene.addEllipse(rect, red_pen, red_brush)
