@@ -6,7 +6,7 @@ entry_points = {"console_scripts": ["aperoll=aperoll.scripts.aperoll_main:main"]
 setup(
     name="aperoll",
     author="Javier Gonzalez",
-    description="Prosecco with Aperoll make a nice spritz",
+    description="Proseco with Aperoll make a nice spritz",
     author_email="javier.gonzalez@cfa.harvard.edu",
     packages=["aperoll", "aperoll.scripts", "aperoll.widgets"],
     license=(
