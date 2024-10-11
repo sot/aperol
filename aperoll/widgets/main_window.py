@@ -3,17 +3,81 @@ from pathlib import Path
 from pprint import pprint
 from tempfile import TemporaryDirectory
 
+import PyQt5.QtGui as QtG
 import PyQt5.QtWebEngineWidgets as QtWe
+import PyQt5.QtWidgets as QtW
 import sparkles
 from astropy import units as u
 from cxotime import CxoTime
 from proseco import get_aca_catalog
 from PyQt5 import QtCore as QtC
-from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
 
 from .parameters import Parameters
 from .star_plot import StarPlot
+
+STYLE = """
+  <style>
+h1,h2,h3,h4 {
+  color: #990000;
+}
+
+table.table-striped {
+        border-width: thin thin thin thin;
+        border-spacing: 1px;
+        border-style: outset outset outset outset;
+        border-color: gray gray gray gray;
+        border-collapse: separate;
+        background-color: white;
+}
+
+table.table-striped th {
+        border-width: 1px 1px 1px 1px;
+        padding: 1px 3px 1px 3px;
+        border-color: gray;
+        border-style: inset;
+}
+table.table-striped td {
+        border-width: 1px 1px 1px 1px;
+        padding: 1px 3px 1px 3px;
+        border-style: inset;
+        border-color: gray;
+        text-align: right;
+}
+span.critical {
+  color:#ff0000;
+  font-weight:bold;
+}
+span.warning {
+  color:#ff6400;
+}
+span.caution {
+  color:#009900;
+}
+span.info {
+  color:#000099;
+}
+
+span.monospace {
+  font-family:monospace;
+}
+
+.callargs {
+  unicode-bidi: embed;
+  font-family: monospace;
+  white-space: pre;
+}
+
+.hidden {
+  display: none;
+}
+
+.shown {
+  display: block;
+}
+
+</style>
+"""
 
 
 class WebPage(QtWe.QWebEnginePage):
@@ -48,12 +112,19 @@ class MainWindow(QtW.QWidget):
 
         self.plot = StarPlot()
         self.parameters = Parameters(**opts)
+        self.textEdit = QtW.QTextEdit()
+        font = QtG.QFont("Courier New")  # setting a fixed-width font (close enough)
+        font.setPixelSize(5)  # setting a pixel size so it can be changed later
+        self.textEdit.setFont(font)
 
         layout = QtW.QHBoxLayout(self)
-        layout.addWidget(self.parameters)
+        layout_2 = QtW.QVBoxLayout(self)
+        layout_2.addWidget(self.parameters)
+        layout_2.addWidget(self.textEdit)
+        layout.addLayout(layout_2)
         layout.addWidget(self.plot)
 
-        layout.setStretch(0, 1)
+        layout.setStretch(0, 3)
         layout.setStretch(1, 4)
         self.setLayout(layout)
 
@@ -63,11 +134,6 @@ class MainWindow(QtW.QWidget):
         self.plot.attitude_changed.connect(self.parameters.set_ra_dec)
 
         self._init()
-        # try:
-        #     self._do_it()
-        # except Exception as e:
-        #     print(e)
-        #     pass
 
     def closeEvent(self, event):
         if self.web_page is not None:
@@ -133,12 +199,39 @@ class MainWindow(QtW.QWidget):
         return args
 
     def _run_proseco(self):
-        # print("parameters:", self.parameters.values)
+        print("parameters:", self.parameters.values)
         if self.parameters.values:
             args = self._proseco_args()
             pprint(args)
             catalog = get_aca_catalog(**args)
             self.plot.set_catalog(catalog, update=False)
+
+            aca = catalog.get_review_table()
+
+            sparkles.core.check_catalog(aca)
+
+            # aca.messages
+
+            # self.textEdit.setText(table_to_html(catalog))
+            self.textEdit.setText(f"{STYLE}<pre>{aca.get_text_pre()}</pre>")
+
+    def resizeEvent(self, _size):
+        font = self.textEdit.font()
+        header = (
+            "idx slot    id    type  sz p_acq  mag  mag_err "
+            "maxmag   yang    zang   row    col   dim res halfw"
+        )
+        n_lines = 35
+        scale_x = float(0.9 * self.textEdit.width()) / QtG.QFontMetrics(font).width(
+            header
+        )
+        scale_y = float(0.9 * self.textEdit.height()) / (
+            n_lines * QtG.QFontMetrics(font).height()
+        )
+        pix_size = int(font.pixelSize() * min(scale_x, scale_y))
+        if pix_size > 0:
+            font.setPixelSize(pix_size)
+        self.textEdit.setFont(font)
 
     def _run_sparkles(self):
         # print("parameters:", self.parameters.values)
