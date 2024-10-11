@@ -1,8 +1,10 @@
 # from PyQt5 import QtCore as QtC, QtWidgets as QtW, QtGui as QtG
 from pathlib import Path
+from pprint import pprint
 from tempfile import TemporaryDirectory
 
 import PyQt5.QtWebEngineWidgets as QtWe
+import sparkles
 from astropy import units as u
 from cxotime import CxoTime
 from proseco import get_aca_catalog
@@ -53,7 +55,8 @@ class MainWindow(QtW.QWidget):
         layout.setStretch(1, 4)
         self.setLayout(layout)
 
-        self.parameters.do_it.connect(self._do_it)
+        self.parameters.do_it.connect(self._run_proseco)
+        self.parameters.run_sparkles.connect(self._run_sparkles)
         self.parameters.draw_test.connect(self._draw_test)
         self.plot.attitude_changed.connect(self.parameters.set_ra_dec)
 
@@ -71,7 +74,6 @@ class MainWindow(QtW.QWidget):
         event.accept()
 
     def _init(self):
-        print("parameters:", self.parameters.values)
         if self.parameters.values:
             # obsid = self.parameters.values["obsid"]
             ra, dec = self.parameters.values["ra"], self.parameters.values["dec"]
@@ -86,7 +88,7 @@ class MainWindow(QtW.QWidget):
             aca_attitude = Quat(
                 equatorial=(float(ra / u.deg), float(dec / u.deg), roll)
             )
-            print("ra, dec, roll =", (float(ra / u.deg), float(dec / u.deg), roll))
+            # print("ra, dec, roll =", (float(ra / u.deg), float(dec / u.deg), roll))
             self.plot.set_base_attitude(aca_attitude, update=False)
             self.plot.set_time(time, update=True)
 
@@ -103,78 +105,66 @@ class MainWindow(QtW.QWidget):
                 ra_offset=dq.ra, dec_offset=dq.dec, roll_offset=dq.roll
             )
 
-    def _do_it(self):
-        print("parameters:", self.parameters.values)
+    def _proseco_args(self):
+        obsid = self.parameters.values["obsid"]
+        ra, dec = self.parameters.values["ra"], self.parameters.values["dec"]
+        roll = self.parameters.values["roll"]
+        time = CxoTime(self.parameters.values["date"])
+
+        aca_attitude = Quat(equatorial=(float(ra / u.deg), float(dec / u.deg), roll))
+
+        args = {
+            "obsid": obsid,
+            "att": aca_attitude,
+            "date": time,
+            "n_fid": self.parameters.values["n_fid"],
+            "n_guide": self.parameters.values["n_guide"],
+            "dither_acq": (16, 16),  # standard dither with ACIS
+            "dither_guide": (16, 16),  # standard dither with ACIS
+            "t_ccd_acq": self.parameters.values["t_ccd"],
+            "t_ccd_guide": self.parameters.values["t_ccd"],
+            "man_angle": 0,  # what is a sensible number to use??
+            "detector": self.parameters.values["instrument"],
+            "sim_offset": 0,  # docs say this is optional, but it does not seem to be
+            "focus_offset": 0,  # docs say this is optional, but it does not seem to be
+        }
+        return args
+
+    def _run_proseco(self):
+        # print("parameters:", self.parameters.values)
         if self.parameters.values:
-            obsid = self.parameters.values["obsid"]
-            ra, dec = self.parameters.values["ra"], self.parameters.values["dec"]
-            roll = self.parameters.values["roll"]
-            time = CxoTime(self.parameters.values["date"])
+            args = self._proseco_args()
+            pprint(args)
+            catalog = get_aca_catalog(**args)
+            self.plot.set_catalog(catalog, update=False)
 
-            # aca_attitude = calc_aca_from_targ(
-            #     Quat(equatorial=(float(ra / u.deg), float(dec / u.deg), nominal_roll)),
-            #     0,
-            #     0
-            # )
-            aca_attitude = Quat(
-                equatorial=(float(ra / u.deg), float(dec / u.deg), roll)
-            )
-            print("ra, dec, roll =", (float(ra / u.deg), float(dec / u.deg), roll))
-            from pprint import pprint
+    def _run_sparkles(self):
+        # print("parameters:", self.parameters.values)
+        if self.parameters.values:
+            args = self._proseco_args()
+            pprint(args)
+            catalog = get_aca_catalog(**args)
 
-            pprint(
-                {
-                    "obsid": obsid,
-                    "att": aca_attitude,
-                    "date": time,
-                    "n_fid": self.parameters.values["n_fid"],
-                    "n_guide": self.parameters.values["n_guide"],
-                    "dither_acq": (16, 16),  # standard dither with ACIS
-                    "dither_guide": (16, 16),  # standard dither with ACIS
-                    "t_ccd_acq": self.parameters.values["t_ccd"],
-                    "t_ccd_guide": self.parameters.values["t_ccd"],
-                    "man_angle": 0,  # what is a sensible number to use??
-                    "detector": self.parameters.values["instrument"],
-                    "sim_offset": 0,  # docs say this is optional, but it does not seem to be
-                    "focus_offset": 0,  # docs say this is optional, but it does not seem to be
-                }
+            sparkles.run_aca_review(
+                "Exploration",
+                acars=[catalog.get_review_table()],
+                report_dir=self._dir / "sparkles",
+                report_level="all",
+                roll_level="none",
             )
-            catalog = get_aca_catalog(
-                obsid=obsid,
-                att=aca_attitude,
-                date=time,
-                n_fid=self.parameters.values["n_fid"],
-                n_guide=self.parameters.values["n_guide"],
-                dither_acq=(16, 16),  # standard dither with ACIS
-                dither_guide=(16, 16),  # standard dither with ACIS
-                t_ccd_acq=self.parameters.values["t_ccd"],
-                t_ccd_guide=self.parameters.values["t_ccd"],
-                man_angle=0,  # what is a sensible number to use??
-                detector=self.parameters.values["instrument"],
-                sim_offset=0,  # docs say this is optional, but it does not seem to be
-                focus_offset=0,  # docs say this is optional, but it does not seem to be
-            )
-
-            # run_aca_review(
-            #     'Exploration',
-            #     acars=[catalog.get_review_table()],
-            #     report_dir=self._dir / 'sparkles',
-            #     report_level='all',
-            #     roll_level='none',
-            # )
-            # print(f'sparkles report at {self._dir / "sparkles"}')
-            # try:
-            #     w = QtW.QMainWindow(self)
-            #     w.resize(1400, 1000)
-            #     web = QtWe.QWebEngineView(w)
-            #     w.setCentralWidget(web)
-            #     self.web_page = WebPage()
-            #     web.setPage(self.web_page)
-            #     url = self._dir / 'sparkles' / 'index.html'
-            #     web.load(QtC.QUrl(f'file://{url}'))
-            #     web.show()
-            #     w.show()
-            # except Exception as e:
-            #     print(e)
+            print(f"sparkles report at {self._dir / 'sparkles'}")
+            try:
+                w = QtW.QMainWindow(self)
+                w.resize(1400, 1000)
+                web = QtWe.QWebEngineView(w)
+                w.setCentralWidget(web)
+                self.web_page = WebPage()
+                web.setPage(self.web_page)
+                url = self._dir / "sparkles" / "index.html"
+                web.load(QtC.QUrl(f"file://{url}"))
+                web.show()
+                w.show()
+            except Exception as e:
+                print(e)
 
             self.plot.set_catalog(catalog, update=False)

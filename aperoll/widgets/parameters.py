@@ -33,6 +33,7 @@ def get_parameters():
 
 class Parameters(QtW.QWidget):
     do_it = QtC.pyqtSignal()
+    run_sparkles = QtC.pyqtSignal()
     draw_test = QtC.pyqtSignal()
 
     def __init__(self, **kwargs):  # noqa: PLR0915
@@ -56,7 +57,8 @@ class Parameters(QtW.QWidget):
         self.instrument_label = QtW.QLabel("instrument")
         self.instrument_edit = QtW.QComboBox(self)
         self.instrument_edit.addItems(["ACIS-S", "ACIS-I", "HRC-S", "HRC-I"])
-        self.do = QtW.QPushButton("Starcheck")
+        self.do = QtW.QPushButton("Get Catalog")
+        self.run_sparkles_button = QtW.QPushButton("Run Sparkles")
         self.draw_test_button = QtW.QPushButton("Draw Test")
         v_layout = QtW.QVBoxLayout(self)
         layout = QtW.QGridLayout()
@@ -77,7 +79,8 @@ class Parameters(QtW.QWidget):
         layout.addWidget(self.instrument_label, 7, 0)
         layout.addWidget(self.instrument_edit, 7, 1)
         layout.addWidget(self.do, 8, 1)
-        layout.addWidget(self.draw_test_button, 9, 1)
+        layout.addWidget(self.run_sparkles_button, 9, 1)
+        # layout.addWidget(self.draw_test_button, 10, 1)
         v_layout.addLayout(layout)
         v_layout.addStretch(0)
 
@@ -99,6 +102,7 @@ class Parameters(QtW.QWidget):
         self.values = self._validate()
         self.do.clicked.connect(self._do_it)
         self.draw_test_button.clicked.connect(self._draw_test)
+        self.run_sparkles_button.clicked.connect(self.run_sparkles)
 
     def _draw_test(self):
         self.values = self._validate()
