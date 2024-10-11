@@ -8,10 +8,11 @@ from aperoll.widgets.main_window import MainWindow
 
 def get_parser():
     import argparse
+
     parse = argparse.ArgumentParser()
-    parse.add_argument('--date', default='2021-08-23 00:00:00.000')
-    parse.add_argument('--ra', default='6.45483333')
-    parse.add_argument('--dec', default='-26.03683611')
+    parse.add_argument("--date", default="2021-08-23 00:00:00.000")
+    parse.add_argument("--ra", default="6.45483333")
+    parse.add_argument("--dec", default="-26.03683611")
     return parse
 
 
@@ -25,5 +26,5 @@ def main():
     app.exec()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

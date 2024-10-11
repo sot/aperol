@@ -1,22 +1,21 @@
-
 import numpy as np
 from astropy.table import Table
-
-from PyQt5 import QtCore as QtC, QtWidgets as QtW, QtGui as QtG
-
-from Quaternion import Quat
-from cxotime import CxoTime
-
 from chandra_aca.transform import (
-    yagzag_to_pixels,
     pixels_to_yagzag,
+    radec_to_yagzag,
+    yagzag_to_pixels,
     yagzag_to_radec,
-    radec_to_yagzag
 )
-
+from cxotime import CxoTime
+from PyQt5 import QtCore as QtC
+from PyQt5 import QtGui as QtG
+from PyQt5 import QtWidgets as QtW
+from Quaternion import Quat
 
 # The nominal origin of the CCD, in pixel coordinates (yagzag_to_pixels(0, 0))
-CCD_ORIGIN = yagzag_to_pixels(0, 0)  # (6.08840495576943, 4.92618563916467) as of this writing
+CCD_ORIGIN = yagzag_to_pixels(
+    0, 0
+)  # (6.08840495576943, 4.92618563916467) as of this writing
 
 
 def symsize(mag):
@@ -30,16 +29,17 @@ def symsize(mag):
 def get_stars(starcat_time, quaternion, radius=2):
     import agasc
     from Ska.quatutil import radec2yagzag
-    stars = agasc.get_agasc_cone(quaternion.ra, quaternion.dec,
-                                 radius=radius,
-                                 date=starcat_time)
 
-    if 'yang' not in stars.colnames or 'zang' not in stars.colnames:
+    stars = agasc.get_agasc_cone(
+        quaternion.ra, quaternion.dec, radius=radius, date=starcat_time
+    )
+
+    if "yang" not in stars.colnames or "zang" not in stars.colnames:
         # Add star Y angle and Z angle in arcsec to the stars table.
         # radec2yagzag returns degrees.
-        yags, zags = radec2yagzag(stars['RA_PMCORR'], stars['DEC_PMCORR'], quaternion)
-        stars['yang'] = yags * 3600
-        stars['zang'] = zags * 3600
+        yags, zags = radec2yagzag(stars["RA_PMCORR"], stars["DEC_PMCORR"], quaternion)
+        stars["yang"] = yags * 3600
+        stars["zang"] = zags * 3600
 
     return stars
 
@@ -55,7 +55,6 @@ class StarView(QtW.QGraphicsView):
         self._moving = False
 
     def mouseMoveEvent(self, event):
-
         pos = event.pos()
         if self._start is None:
             return
@@ -73,8 +72,12 @@ class StarView(QtW.QGraphicsView):
                 dx, dy = end_pos.x() - start_pos.x(), end_pos.y() - start_pos.y()
 
                 scene_rect = self.scene().sceneRect()
-                new_scene_rect = QtC.QRectF(scene_rect.x() - dx, scene_rect.y() - dy,
-                                            scene_rect.width(), scene_rect.height())
+                new_scene_rect = QtC.QRectF(
+                    scene_rect.x() - dx,
+                    scene_rect.y() - dy,
+                    scene_rect.width(),
+                    scene_rect.height(),
+                )
                 self.scene().setSceneRect(new_scene_rect)
             elif self._rotating:
                 center = self.mapToScene(self.viewport().rect().center())
@@ -141,8 +144,7 @@ class StarView(QtW.QGraphicsView):
         row2, col2 = self.transform_pixels_to_attitude(edge_1[0], edge_1[1], att_offset)
         for i in range(len(row2) - 1):
             painter.drawLine(
-                QtC.QPointF(row2[i], col2[i]), 
-                QtC.QPointF(row2[i+1], col2[i+1])
+                QtC.QPointF(row2[i], col2[i]), QtC.QPointF(row2[i + 1], col2[i + 1])
             )
 
         edge_2 = np.array(
@@ -155,29 +157,26 @@ class StarView(QtW.QGraphicsView):
         row2, col2 = self.transform_pixels_to_attitude(edge_2[0], edge_2[1], att_offset)
         for i in range(len(row2) - 1):
             painter.drawLine(
-                QtC.QPointF(row2[i], col2[i]),
-                QtC.QPointF(row2[i+1], col2[i+1])
+                QtC.QPointF(row2[i], col2[i]), QtC.QPointF(row2[i + 1], col2[i + 1])
             )
 
-        painter.setPen(QtG.QPen(QtG.QColor('magenta')))
-        cross_2 = np.array(
-            [[i, 0] for i in np.linspace(-511, 511, N)]
-        ).T
-        row2, col2 = self.transform_pixels_to_attitude(cross_2[0], cross_2[1], att_offset)
+        painter.setPen(QtG.QPen(QtG.QColor("magenta")))
+        cross_2 = np.array([[i, 0] for i in np.linspace(-511, 511, N)]).T
+        row2, col2 = self.transform_pixels_to_attitude(
+            cross_2[0], cross_2[1], att_offset
+        )
         for i in range(len(row2) - 1):
             painter.drawLine(
-                QtC.QPointF(row2[i], col2[i]), 
-                QtC.QPointF(row2[i+1], col2[i+1])
+                QtC.QPointF(row2[i], col2[i]), QtC.QPointF(row2[i + 1], col2[i + 1])
             )
 
-        cross_1 = np.array(
-            [[0, i] for i in np.linspace(-511, 511, N)]
-        ).T
-        row2, col2 = self.transform_pixels_to_attitude(cross_1[0], cross_1[1], att_offset)
+        cross_1 = np.array([[0, i] for i in np.linspace(-511, 511, N)]).T
+        row2, col2 = self.transform_pixels_to_attitude(
+            cross_1[0], cross_1[1], att_offset
+        )
         for i in range(len(row2) - 1):
             painter.drawLine(
-                QtC.QPointF(row2[i], col2[i]), 
-                QtC.QPointF(row2[i+1], col2[i+1])
+                QtC.QPointF(row2[i], col2[i]), QtC.QPointF(row2[i + 1], col2[i + 1])
             )
 
     def transform_pixels_to_attitude(self, row, col, q):
@@ -186,27 +185,26 @@ class StarView(QtW.QGraphicsView):
         return row, col
 
     def transform_pixels_to_attitude_1(self, row, col, q):
-        q0 = Quat(q=[0,0,0,1])
+        q0 = Quat(q=[0, 0, 0, 1])
         y, z = pixels_to_yagzag(row, col, allow_bad=True)
         ra, dec = yagzag_to_radec(y, z, q0)
         y2, z2 = radec_to_yagzag(ra, dec, q)
         row, col = yagzag_to_pixels(y2, z2, allow_bad=True)
         return row, col
-    
+
     def transform_pixels_to_attitude_2(self, row, col, q):
         transform = self.viewportTransform()
         row_col = np.array([row, col])
-        transform = np.array([
-            [transform.m11(), transform.m12()],
-            [transform.m21(), transform.m22()]
-        ])
+        transform = np.array(
+            [[transform.m11(), transform.m12()], [transform.m21(), transform.m22()]]
+        )
         # all scaling transforms we apply are isotropic, therefore the two eigenvalues are equal,
         # so the following turns the transform into a rotation matrix
         transform /= np.sqrt(np.linalg.det(transform))
         # the following is a sanity check (that it is actually a rotation)
-        assert np.allclose(transform[0,1], -transform[1,0])
+        assert np.allclose(transform[0, 1], -transform[1, 0])
         assert np.allclose(np.linalg.det(transform), 1)
-        row, col = transform@row_col
+        row, col = transform @ row_col
         return row, col
 
     def get_origin_offset(self):
@@ -223,12 +221,14 @@ class StarView(QtW.QGraphicsView):
 
     def get_attitude_offset(self, no_roll=False):
         x, y = self.get_origin_offset()
-        yag, zag = pixels_to_yagzag(CCD_ORIGIN[0] + x, CCD_ORIGIN[1] - y, allow_bad=True)
+        yag, zag = pixels_to_yagzag(
+            CCD_ORIGIN[0] + x, CCD_ORIGIN[1] - y, allow_bad=True
+        )
         if no_roll:
             roll = 0
         else:
             roll = self.get_roll_offset()
-        q = Quat(equatorial=[yag/3600, -zag/3600, roll])
+        q = Quat(equatorial=[yag / 3600, -zag / 3600, roll])
         return q
 
     def re_center(self):
@@ -284,15 +284,17 @@ class StarPlot(QtW.QWidget):
         if self._base_attitude is None:
             return
         x, y = self.view.get_origin_offset()
-        yag, zag = pixels_to_yagzag(self._origin[0] + x, self._origin[1] - y, allow_bad=True)
+        yag, zag = pixels_to_yagzag(
+            self._origin[0] + x, self._origin[1] - y, allow_bad=True
+        )
         ra, dec = yagzag_to_radec(yag, zag, self._base_attitude)
         # print('RA/dec changed', ra, dec)
-        self._current_attitude = Quat(
-            equatorial=[ra, dec, self._current_attitude.roll]
-        )
+        self._current_attitude = Quat(equatorial=[ra, dec, self._current_attitude.roll])
         # print(f'Attitude changed. RA: {ra}, dec: {dec}, roll: {roll} ({x}, {y})')
         self.attitude_changed.emit(
-            self._current_attitude.ra, self._current_attitude.dec, self._current_attitude.roll
+            self._current_attitude.ra,
+            self._current_attitude.dec,
+            self._current_attitude.roll,
         )
 
     def _roll_changed(self, roll_offset):
@@ -302,12 +304,16 @@ class StarPlot(QtW.QWidget):
         # the view class keeps track of this.
         # print('roll changed', roll_offset)
         self._current_attitude = Quat(
-            equatorial=[self._current_attitude.ra,
-                        self._current_attitude.dec,
-                        self._base_attitude.roll - roll_offset]
+            equatorial=[
+                self._current_attitude.ra,
+                self._current_attitude.dec,
+                self._base_attitude.roll - roll_offset,
+            ]
         )
         self.attitude_changed.emit(
-            self._current_attitude.ra, self._current_attitude.dec, self._current_attitude.roll
+            self._current_attitude.ra,
+            self._current_attitude.dec,
+            self._current_attitude.roll,
         )
 
     def set_base_attitude(self, q, update=True):
@@ -346,7 +352,9 @@ class StarPlot(QtW.QWidget):
             self.scene.removeItem(item)
         self._test_stars_items = []
 
-    def show_test_stars(self, ra_offset=0/3600, dec_offset=3000/3600, roll_offset=15, N=100, mag=10):
+    def show_test_stars(
+        self, ra_offset=0 / 3600, dec_offset=3000 / 3600, roll_offset=15, N=100, mag=10
+    ):
         dq = Quat(equatorial=[ra_offset, dec_offset, roll_offset])
         q = self._base_attitude * dq
         self.show_test_stars_q(q, N, mag)
@@ -361,27 +369,21 @@ class StarPlot(QtW.QWidget):
         # The test stars will be placed so they appar at the edge of the camera
         # if the attitude is the one given.
         # These are the positions at the edge, in pixel coordinates
-        rows, cols = np.array([[-511, i] for i in np.linspace(-511, 511, N)] + \
-            [[i, 511] for i in np.linspace(-511, 511, N)] + \
-            [[511, i] for i in np.linspace(511, -511, N)] + \
-            [[i, -511] for i in np.linspace(511, -511, N)]).T
+        rows, cols = np.array(
+            [[-511, i] for i in np.linspace(-511, 511, N)]
+            + [[i, 511] for i in np.linspace(-511, 511, N)]
+            + [[511, i] for i in np.linspace(511, -511, N)]
+            + [[i, -511] for i in np.linspace(511, -511, N)]
+        ).T
         yags, zags = pixels_to_yagzag(rows, cols, allow_bad=True)
         # and these are the positions in RA/dec, assuming the given attitude
-        ra, dec = yagzag_to_radec(
-            yags,
-            zags,
-            q
-        )
+        ra, dec = yagzag_to_radec(yags, zags, q)
         # now transform the other way, assuming the current attitude
-        yags2, zags2 = radec_to_yagzag(
-            ra,
-            dec,
-            self._base_attitude
-        )
+        yags2, zags2 = radec_to_yagzag(ra, dec, self._base_attitude)
         rows2, cols2 = yagzag_to_pixels(yags2, zags2, allow_bad=True)
         # and plot them
         # note that the coordinate system is (row, -col)
-        for row, col in zip(rows2, cols2):
+        for row, col in zip(rows2, cols2, strict=False):
             s = symsize(mag)
             rect = QtC.QRectF(row - s / 2, -col - s / 2, s, s)
             self._test_stars_items.append(
@@ -394,8 +396,8 @@ class StarPlot(QtW.QWidget):
             return
         self.stars = get_stars(self._time, self._base_attitude)
         # Update table to include row/col values corresponding to yag/zag
-        self.stars['row'], self.stars['col'] = yagzag_to_pixels(
-            self.stars['yang'], self.stars['zang'], allow_bad=True
+        self.stars["row"], self.stars["col"] = yagzag_to_pixels(
+            self.stars["yang"], self.stars["zang"], allow_bad=True
         )
         black_pen = QtG.QPen()
         black_pen.setWidth(2)
@@ -403,10 +405,10 @@ class StarPlot(QtW.QWidget):
         red_pen = QtG.QPen(QtG.QColor("red"))
         red_brush = QtG.QBrush(QtG.QColor("red"))
         for star in self.stars:
-            s = symsize(star['MAG_ACA'])
+            s = symsize(star["MAG_ACA"])
             # note that the coordinate system is (row, -col)
-            rect = QtC.QRectF(star['row'] - s / 2, -star['col'] - s / 2, s, s)
-            if self._highlight is not None and star['AGASC_ID'] in self._highlight:
+            rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
+            if self._highlight is not None and star["AGASC_ID"] in self._highlight:
                 self.scene.addEllipse(rect, red_pen, red_brush)
             else:
                 self.scene.addEllipse(rect, black_pen, black_brush)
@@ -425,75 +427,65 @@ class StarPlot(QtW.QWidget):
             cat = Table(self._catalog)
             # the catalog was made using self._current_attitude, but the stars are plotted using
             # self._base_attitude
-            ra, dec = yagzag_to_radec(cat['yang'], cat['zang'], self._current_attitude)
+            ra, dec = yagzag_to_radec(cat["yang"], cat["zang"], self._current_attitude)
             yag, zag = radec_to_yagzag(ra, dec, self._base_attitude)
-            cat['row'], cat['col'] = yagzag_to_pixels(yag, zag, allow_bad=True)
-            gui_stars = cat[(cat['type'] == 'GUI') | (cat['type'] == 'BOT')]
-            acq_stars = cat[(cat['type'] == 'ACQ') | (cat['type'] == 'BOT')]
-            fids = cat[cat['type'] == 'FID']
-            mon_wins = cat[cat['type'] == 'MON']
+            cat["row"], cat["col"] = yagzag_to_pixels(yag, zag, allow_bad=True)
+            gui_stars = cat[(cat["type"] == "GUI") | (cat["type"] == "BOT")]
+            acq_stars = cat[(cat["type"] == "ACQ") | (cat["type"] == "BOT")]
+            fids = cat[cat["type"] == "FID"]
+            mon_wins = cat[cat["type"] == "MON"]
 
             for gui_star in gui_stars:
                 w = 20
                 # note that the coordinate system is (row, -col)
                 rect = QtC.QRectF(
-                    gui_star['row'] - w,
-                    -gui_star['col'] - w,
-                    w * 2,
-                    w * 2
+                    gui_star["row"] - w, -gui_star["col"] - w, w * 2, w * 2
                 )
                 self._catalog_items.append(
-                    self.scene.addEllipse(
-                        rect,
-                        QtG.QPen(QtG.QColor("green"), 3)
-                    )
+                    self.scene.addEllipse(rect, QtG.QPen(QtG.QColor("green"), 3))
                 )
             for acq_star in acq_stars:
                 self._catalog_items.append(
                     self.scene.addRect(
-                        acq_star['row'] - acq_star['halfw'] / 5,
-                        -acq_star['col'] - acq_star['halfw'] / 5,
-                        acq_star['halfw'] * 2 / 5,
-                        acq_star['halfw'] * 2 / 5,
-                        QtG.QPen(QtG.QColor("blue"), 3)
+                        acq_star["row"] - acq_star["halfw"] / 5,
+                        -acq_star["col"] - acq_star["halfw"] / 5,
+                        acq_star["halfw"] * 2 / 5,
+                        acq_star["halfw"] * 2 / 5,
+                        QtG.QPen(QtG.QColor("blue"), 3),
                     )
                 )
             for mon_box in mon_wins:
                 # starcheck convention was to plot monitor boxes at 2X halfw
                 self._catalog_items.append(
                     self.scene.addRect(
-                        mon_box['row'] - (mon_box['halfw'] * 2 / 5),
-                        -mon_box['col'] - (mon_box['halfw'] * 2 / 5),
-                        mon_box['halfw'] * 4 / 5,
-                        mon_box['halfw'] * 4 / 5,
-                        QtG.QPen(QtG.QColor(255, 165, 0), 3)
+                        mon_box["row"] - (mon_box["halfw"] * 2 / 5),
+                        -mon_box["col"] - (mon_box["halfw"] * 2 / 5),
+                        mon_box["halfw"] * 4 / 5,
+                        mon_box["halfw"] * 4 / 5,
+                        QtG.QPen(QtG.QColor(255, 165, 0), 3),
                     )
                 )
             for fid in fids:
                 w = 25
-                rect = QtC.QRectF(
-                    fid['row'] - w,
-                    -fid['col'] - w,
-                    w * 2,
-                    w * 2
+                rect = QtC.QRectF(fid["row"] - w, -fid["col"] - w, w * 2, w * 2)
+                self._catalog_items.append(
+                    self.scene.addEllipse(rect, QtG.QPen(QtG.QColor("red"), 3))
                 )
                 self._catalog_items.append(
-                    self.scene.addEllipse(
-                        rect,
-                        QtG.QPen(QtG.QColor("red"), 3)
+                    self.scene.addLine(
+                        fid["row"] - w,
+                        -fid["col"],
+                        fid["row"] + w,
+                        -fid["col"],
+                        QtG.QPen(QtG.QColor("red"), 3),
                     )
                 )
                 self._catalog_items.append(
                     self.scene.addLine(
-                        fid['row'] - w, -fid['col'],
-                        fid['row'] + w, -fid['col'],
-                        QtG.QPen(QtG.QColor("red"), 3)
-                    )
-                )
-                self._catalog_items.append(
-                    self.scene.addLine(
-                        fid['row'], -fid['col'] - w,
-                        fid['row'], -fid['col'] + w,
-                        QtG.QPen(QtG.QColor("red"), 3)
+                        fid["row"],
+                        -fid["col"] - w,
+                        fid["row"],
+                        -fid["col"] + w,
+                        QtG.QPen(QtG.QColor("red"), 3),
                     )
                 )
