@@ -39,6 +39,8 @@ class MainWindow(QtW.QWidget):
         opts = {} if opts is None else opts
         opts = {k: opts[k] for k in opts if opts[k] is not None}
 
+        pprint(opts)
+
         self.web_page = None
 
         self._tmp_dir = TemporaryDirectory()

@@ -1,3 +1,6 @@
+import json
+from pprint import pprint
+
 import Ska.Sun as sun
 from astropy import units as u
 from cxotime.cxotime import CxoTime
@@ -37,8 +40,6 @@ class Parameters(QtW.QWidget):
     draw_test = QtC.pyqtSignal()
 
     def __init__(self, **kwargs):  # noqa: PLR0915
-        kwargs = {}
-
         super().__init__()
         self.date_label = QtW.QLabel("date")
         self.date_edit = QtW.QLineEdit(self)
@@ -84,14 +85,48 @@ class Parameters(QtW.QWidget):
         v_layout.addLayout(layout)
         v_layout.addStretch(0)
 
+        file = kwargs.pop("file", None)
+        if file:
+            with open(file) as fh:
+                file_kwargs = json.load(fh)[0]  # assuming there is only one entry
+
+                file_kwargs["date"] = file_kwargs["obs_date"]
+                file_kwargs["ra"] = file_kwargs["ra_targ"]
+                file_kwargs["dec"] = file_kwargs["dec_targ"]
+                file_kwargs["roll"] = file_kwargs["roll_targ"]
+                file_kwargs["dither"] = (
+                    file_kwargs["dither_y"],
+                    file_kwargs["dither_z"],
+                )
+                file_kwargs["instrument"] = file_kwargs["detector"]
+                for key in [
+                    "obs_date",
+                    "ra_targ",
+                    "dec_targ",
+                    "roll_targ",
+                    "dither_y",
+                    "dither_z",
+                    "detector",
+                ]:
+                    del file_kwargs[key]
+                kwargs.update(file_kwargs)
+
         params = get_parameters()
 
+        if abs(kwargs.get("obsid", 0)) < 38000:
+            kwargs["n_fid"] = "3"
+            kwargs["n_guide"] = "5"
+        else:
+            kwargs["n_fid"] = "0"
+            kwargs["n_guide"] = "8"
+
+        pprint(kwargs)
         self.date_edit.setText(kwargs.get("date", params["date"]))
-        self.ra_edit.setText(kwargs.get("ra", f"{params['attitude'].ra:.8f}"))
-        self.dec_edit.setText(kwargs.get("dec", f"{params['attitude'].dec:.8f}"))
-        self.roll_edit.setText(kwargs.get("roll", f"{params['attitude'].roll:.8f}"))
-        self.n_guide_edit.setText(kwargs.get("n_guide", "5"))
-        self.n_fid_edit.setText(kwargs.get("n_fid", "3"))
+        self.ra_edit.setText(f"{kwargs.get('ra', params['attitude'].ra):.8f}")
+        self.dec_edit.setText(f"{kwargs.get('dec', params['attitude'].dec):.8f}")
+        self.roll_edit.setText(f"{kwargs.get('roll', params['attitude'].roll):.8f}")
+        self.n_guide_edit.setText(f"{kwargs['n_guide']}")
+        self.n_fid_edit.setText(f"{kwargs['n_fid']}")
         self.n_t_ccd_edit.setText(kwargs.get("t_ccd", f"{params['t_ccd']:.2f}"))
         self.instrument_edit.setCurrentText(
             kwargs.get("instrument", params["instrument"])

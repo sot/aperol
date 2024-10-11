@@ -10,9 +10,10 @@ def get_parser():
     import argparse
 
     parse = argparse.ArgumentParser()
-    parse.add_argument("--date", default="2021-08-23 00:00:00.000")
-    parse.add_argument("--ra", default="6.45483333")
-    parse.add_argument("--dec", default="-26.03683611")
+    parse.add_argument("file", nargs="?", default=None)
+    parse.add_argument("--date")
+    parse.add_argument("--ra")
+    parse.add_argument("--dec")
     return parse
 
 
