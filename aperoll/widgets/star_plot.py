@@ -44,6 +44,19 @@ def get_stars(starcat_time, quaternion, radius=2):
     return stars
 
 
+class Star(QtW.QGraphicsEllipseItem):
+    def __init__(self, star, parent=None, highlight=False):
+        s = symsize(star["MAG_ACA"])
+        # note that the coordinate system is (row, -col)
+        rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
+        super().__init__(rect, parent)
+        self.star = star
+        color = "red" if highlight else "black"
+        self.setBrush(QtG.QBrush(QtG.QColor(color)))
+
+    def __repr__(self):
+        return f"Star({self.star['AGASC_ID']})"
+
 class StarView(QtW.QGraphicsView):
     roll_changed = QtC.pyqtSignal(float)
 
@@ -268,7 +281,7 @@ class StarPlot(QtW.QWidget):
         # "current attitude" refers to the attitude taking into account the viewport's position
         self._current_attitude = None
         self._time = None
-        self._highlight = None
+        self._highlight = []
         self._catalog = None
 
         self._catalog_items = []
@@ -401,17 +414,10 @@ class StarPlot(QtW.QWidget):
         )
         black_pen = QtG.QPen()
         black_pen.setWidth(2)
-        black_brush = QtG.QBrush(QtG.QColor("black"))
-        red_pen = QtG.QPen(QtG.QColor("red"))
-        red_brush = QtG.QBrush(QtG.QColor("red"))
         for star in self.stars:
-            s = symsize(star["MAG_ACA"])
-            # note that the coordinate system is (row, -col)
-            rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
-            if self._highlight is not None and star["AGASC_ID"] in self._highlight:
-                self.scene.addEllipse(rect, red_pen, red_brush)
-            else:
-                self.scene.addEllipse(rect, black_pen, black_brush)
+            self.scene.addItem(
+                Star(star, highlight=star["AGASC_ID"] in self._highlight)
+            )
 
         # self.view.centerOn(QtC.QPointF(self._origin[0], self._origin[1]))
         self.view.re_center()
