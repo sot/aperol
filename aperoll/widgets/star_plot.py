@@ -435,6 +435,14 @@ class StarPlot(QtW.QWidget):
             fids = cat[cat["type"] == "FID"]
             mon_wins = cat[cat["type"] == "MON"]
 
+            for star in cat:
+                txt = self.scene.addText(
+                    f"{star['idx']}",
+                    QtG.QFont("Arial", 32),
+                )
+                txt.setPos(star["row"] + 16, -star["col"] - 40)
+                txt.setDefaultTextColor(QtG.QColor("red"))
+                self._catalog_items.append(txt)
             for gui_star in gui_stars:
                 w = 20
                 # note that the coordinate system is (row, -col)
