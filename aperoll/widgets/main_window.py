@@ -118,7 +118,7 @@ class MainWindow(QtW.QWidget):
         self.textEdit.setFont(font)
 
         layout = QtW.QHBoxLayout(self)
-        layout_2 = QtW.QVBoxLayout(self)
+        layout_2 = QtW.QVBoxLayout()
         layout_2.addWidget(self.parameters)
         layout_2.addWidget(self.textEdit)
         layout.addLayout(layout_2)
