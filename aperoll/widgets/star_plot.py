@@ -51,11 +51,41 @@ class Star(QtW.QGraphicsEllipseItem):
         rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
         super().__init__(rect, parent)
         self.star = star
-        color = "red" if highlight else "black"
-        self.setBrush(QtG.QBrush(QtG.QColor(color)))
+        self.highlight = highlight
+        color = self.color()
+        self.setBrush(QtG.QBrush(color))
+        self.setPen(QtG.QPen(color))
 
     def __repr__(self):
         return f"Star({self.star['AGASC_ID']})"
+
+    def color(self):
+        if self.highlight:
+            return QtG.QColor("red")
+        if self.star["MAG_ACA"] > 10.5:
+            return QtG.QColor("lightGray")
+        if self.bad():
+            return QtG.QColor(255, 99, 71, 191)
+        return QtG.QColor("black")
+
+    def bad(self):
+        ok = (
+            (self.star["CLASS"] == 0)
+            & (self.star["MAG_ACA"] > 5.3)
+            & (self.star["MAG_ACA"] < 11.0)
+            & (~np.isclose(self.star["COLOR1"], 0.7))
+            & (self.star["MAG_ACA_ERR"] < 100.0)  # mag_err is in 0.01 mag
+            & (self.star["ASPQ1"] < 40)
+            & (  # Less than 2 arcsec centroid offset due to nearby spoiler
+                self.star["ASPQ2"] == 0
+            )
+            & (self.star["POS_ERR"] < 3000)  # Position error < 3.0 arcsec
+            & (
+                (self.star["VAR"] == -9999) | (self.star["VAR"] == 5)
+            )  # Not known to vary > 0.2 mag
+        )
+        return not ok
+
 
 class StarView(QtW.QGraphicsView):
     roll_changed = QtC.pyqtSignal(float)
