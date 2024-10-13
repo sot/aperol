@@ -61,6 +61,14 @@ class Parameters(QtW.QWidget):
         self.do = QtW.QPushButton("Get Catalog")
         self.run_sparkles_button = QtW.QPushButton("Run Sparkles")
         self.draw_test_button = QtW.QPushButton("Draw Test")
+        self.include = {
+            "acq": QtW.QListWidget(self),
+            "guide": QtW.QListWidget(self),
+        }
+        self.exclude = {
+            "acq": QtW.QListWidget(self),
+            "guide": QtW.QListWidget(self),
+        }
         v_layout = QtW.QVBoxLayout(self)
         layout = QtW.QGridLayout()
         layout.addWidget(self.date_label, 0, 0)
@@ -81,7 +89,15 @@ class Parameters(QtW.QWidget):
         layout.addWidget(self.instrument_edit, 7, 1)
         layout.addWidget(self.do, 8, 1)
         layout.addWidget(self.run_sparkles_button, 9, 1)
-        # layout.addWidget(self.draw_test_button, 10, 1)
+
+        tab = QtW.QTabWidget()
+        tab.addTab(self.include["acq"], "Include Acq.")
+        tab.addTab(self.exclude["acq"], "Exclude Acq.")
+        tab.addTab(self.include["guide"], "Include Guide")
+        tab.addTab(self.exclude["guide"], "Exclude Guide")
+        tab.setCurrentIndex(0)
+        layout.addWidget(tab, 10, 0, 1, 2)
+
         v_layout.addLayout(layout)
         v_layout.addStretch(0)
 
@@ -170,6 +186,22 @@ class Parameters(QtW.QWidget):
                 "t_ccd": float(self.n_t_ccd_edit.text()),
                 "instrument": self.instrument_edit.currentText(),
                 "obsid": obsid,
+                "exclude_ids_acq": [
+                    int(self.exclude["acq"].item(i).text())
+                    for i in range(self.exclude["acq"].count())
+                ],
+                "include_ids_acq": [
+                    int(self.include["acq"].item(i).text())
+                    for i in range(self.include["acq"].count())
+                ],
+                "exclude_ids_guide": [
+                    int(self.exclude["guide"].item(i).text())
+                    for i in range(self.exclude["guide"].count())
+                ],
+                "include_ids_guide": [
+                    int(self.include["guide"].item(i).text())
+                    for i in range(self.include["guide"].count())
+                ],
             }
         except Exception as e:
             if not quiet:
@@ -185,3 +217,32 @@ class Parameters(QtW.QWidget):
         self.ra_edit.setText(f"{ra:.8f}")
         self.dec_edit.setText(f"{dec:.8f}")
         self.roll_edit.setText(f"{roll:.8f}")
+
+    def include_star(self, star, type, include):
+        if include is True:
+            self._include_star(star, type, True)
+            self._exclude_star(star, type, False)
+        elif include is False:
+            self._include_star(star, type, False)
+            self._exclude_star(star, type, True)
+        else:
+            self._include_star(star, type, include=False)
+            self._exclude_star(star, type, exclude=False)
+
+    def _include_star(self, star, type, include):
+        items = self.include[type].findItems(f"{star}", QtC.Qt.MatchExactly)
+        if include:
+            if not items:
+                self.include[type].addItem(f"{star}")
+        else:
+            for it in items:
+                self.include[type].takeItem(self.include[type].row(it))
+
+    def _exclude_star(self, star, type, exclude):
+        items = self.exclude[type].findItems(f"{star}", QtC.Qt.MatchExactly)
+        if exclude:
+            if not items:
+                self.exclude[type].addItem(f"{star}")
+        else:
+            for it in items:
+                self.exclude[type].takeItem(self.exclude[type].row(it))

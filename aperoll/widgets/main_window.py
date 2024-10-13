@@ -128,6 +128,9 @@ class MainWindow(QtW.QWidget):
         layout.setStretch(1, 4)
         self.setLayout(layout)
 
+        self.plot.include_star.connect(self.parameters.include_star)
+        # self.plot.exclude_star.connect(self.parameters.exclude_star)
+
         self.parameters.do_it.connect(self._run_proseco)
         self.parameters.run_sparkles.connect(self._run_sparkles)
         self.parameters.draw_test.connect(self._draw_test)
@@ -196,6 +199,16 @@ class MainWindow(QtW.QWidget):
             "sim_offset": 0,  # docs say this is optional, but it does not seem to be
             "focus_offset": 0,  # docs say this is optional, but it does not seem to be
         }
+
+        for key in [
+            "exclude_ids_guide",
+            "include_ids_guide",
+            "exclude_ids_acq",
+            "include_ids_acq",
+        ]:
+            if self.parameters.values[key]:
+                args[key] = self.parameters.values[key]
+
         return args
 
     def _run_proseco(self):

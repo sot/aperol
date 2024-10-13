@@ -55,6 +55,10 @@ class Star(QtW.QGraphicsEllipseItem):
         color = self.color()
         self.setBrush(QtG.QBrush(color))
         self.setPen(QtG.QPen(color))
+        self.included = {
+            "acq": None,
+            "guide": None,
+        }
 
     def __repr__(self):
         return f"Star({self.star['AGASC_ID']})"
@@ -103,6 +107,7 @@ class Star(QtW.QGraphicsEllipseItem):
 
 class StarView(QtW.QGraphicsView):
     roll_changed = QtC.pyqtSignal(float)
+    include_star = QtC.pyqtSignal(int, str, object)
 
     def __init__(self, scene=None):
         super().__init__(scene)
@@ -163,12 +168,14 @@ class StarView(QtW.QGraphicsView):
             self._start = pos
 
     def mouseReleaseEvent(self, event):
-        self._start = None
+        if event.button() == QtC.Qt.LeftButton:
+            self._start = None
 
     def mousePressEvent(self, event):
-        self._moving = False
-        self._rotating = False
-        self._start = event.pos()
+        if event.button() == QtC.Qt.LeftButton:
+            self._moving = False
+            self._rotating = False
+            self._start = event.pos()
 
     def wheelEvent(self, event):
         scale = 1 + 0.5 * event.angleDelta().y() / 360
@@ -308,9 +315,47 @@ class StarView(QtW.QGraphicsView):
         transform = self.viewportTransform().rotate(-self.get_roll_offset())
         self.setTransform(transform)
 
+    def contextMenuEvent(self, event):
+        items = [item for item in self.items(event.pos()) if isinstance(item, Star)]
+        if not items:
+            return
+        item = items[0]
+
+        menu = QtW.QMenu()
+
+        incl_action = QtW.QAction("include acq", menu, checkable=True)
+        incl_action.setChecked(item.included["acq"] is True)
+        menu.addAction(incl_action)
+
+        excl_action = QtW.QAction("exclude acq", menu, checkable=True)
+        excl_action.setChecked(item.included["acq"] is False)
+        menu.addAction(excl_action)
+
+        incl_action = QtW.QAction("include guide", menu, checkable=True)
+        incl_action.setChecked(item.included["guide"] is True)
+        menu.addAction(incl_action)
+
+        excl_action = QtW.QAction("exclude guide", menu, checkable=True)
+        excl_action.setChecked(item.included["guide"] is False)
+        menu.addAction(excl_action)
+
+        result = menu.exec_(event.globalPos())
+        if result is not None:
+            action, action_type = result.text().split()
+            if items:
+                if action == "include":
+                    item.included[action_type] = True if result.isChecked() else None
+                elif action == "exclude":
+                    item.included[action_type] = False if result.isChecked() else None
+                self.include_star.emit(
+                    item.star["AGASC_ID"], action_type, item.included[action_type]
+                )
+        event.accept()
+
 
 class StarPlot(QtW.QWidget):
     attitude_changed = QtC.pyqtSignal(float, float, float)
+    include_star = QtC.pyqtSignal(int, str, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -344,6 +389,8 @@ class StarPlot(QtW.QWidget):
 
         self.scene.sceneRectChanged.connect(self._radec_changed)
         self.view.roll_changed.connect(self._roll_changed)
+
+        self.view.include_star.connect(self.include_star)
 
     def _radec_changed(self):
         # RA/dec change when the scene rectangle changes, and its given by the rectangle's center
