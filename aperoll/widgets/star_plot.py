@@ -86,12 +86,28 @@ class Star(QtW.QGraphicsEllipseItem):
         )
         return not ok
 
+    def text(self):
+        return (
+            "<pre>"
+            f"ID:      {self.star['AGASC_ID']}\n"
+            f"mag:     {self.star['MAG_ACA']:.2f} +- {self.star['MAG_ACA_ERR']/100:.2}\n"
+            f"color:   {self.star['COLOR1']:.2f}\n"
+            f"ASPQ1:   {self.star['ASPQ1']}\n"
+            f"ASPQ2:   {self.star['ASPQ2']}\n"
+            f"class:   {self.star['CLASS']}\n"
+            f"pos err: {self.star['POS_ERR']/1000} mas\n"
+            f"VAR:     {self.star['VAR']}"
+            "</pre>"
+        )
+
 
 class StarView(QtW.QGraphicsView):
     roll_changed = QtC.pyqtSignal(float)
 
     def __init__(self, scene=None):
         super().__init__(scene)
+        # mouseTracking is set so we can show tooltips
+        self.setMouseTracking(True)
 
         self._start = None
         self._rotating = False
@@ -99,6 +115,15 @@ class StarView(QtW.QGraphicsView):
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
+
+        items = [item for item in self.items(event.pos()) if isinstance(item, Star)]
+        if items:
+            global_pos = event.globalPos()
+            # supposedly, the following should cause the tooltip to stay for a long time
+            # but it is the same
+            # QtW.QToolTip.showText(global_pos, items[0].text(), self, QtC.QRect(), 1000000000)
+            QtW.QToolTip.showText(global_pos, items[0].text())
+
         if self._start is None:
             return
 
