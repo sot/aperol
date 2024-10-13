@@ -117,15 +117,16 @@ class MainWindow(QtW.QWidget):
         font.setPixelSize(5)  # setting a pixel size so it can be changed later
         self.textEdit.setFont(font)
 
-        layout = QtW.QHBoxLayout(self)
-        layout_2 = QtW.QVBoxLayout()
-        layout_2.addWidget(self.parameters)
-        layout_2.addWidget(self.textEdit)
-        layout.addLayout(layout_2)
-        layout.addWidget(self.plot)
+        layout = QtW.QVBoxLayout(self)
+        layout_2 = QtW.QHBoxLayout()
 
-        layout.setStretch(0, 3)
-        layout.setStretch(1, 4)
+        layout.addWidget(self.parameters)
+        layout_2.addWidget(self.textEdit)
+        layout_2.addWidget(self.plot)
+        layout.addLayout(layout_2)
+
+        layout.setStretch(0, 1)  # the dialog on top should not stretch much
+        layout.setStretch(1, 10)
         self.setLayout(layout)
 
         self.plot.include_star.connect(self.parameters.include_star)
@@ -190,11 +191,11 @@ class MainWindow(QtW.QWidget):
             "date": time,
             "n_fid": self.parameters.values["n_fid"],
             "n_guide": self.parameters.values["n_guide"],
-            "dither_acq": (16, 16),  # standard dither with ACIS
-            "dither_guide": (16, 16),  # standard dither with ACIS
+            "dither_acq": self.parameters.values["dither_acq"],
+            "dither_guide": self.parameters.values["dither_guide"],
             "t_ccd_acq": self.parameters.values["t_ccd"],
             "t_ccd_guide": self.parameters.values["t_ccd"],
-            "man_angle": 0,  # what is a sensible number to use??
+            "man_angle": self.parameters.values["man_angle"],
             "detector": self.parameters.values["instrument"],
             "sim_offset": 0,  # docs say this is optional, but it does not seem to be
             "focus_offset": 0,  # docs say this is optional, but it does not seem to be

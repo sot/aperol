@@ -41,21 +41,15 @@ class Parameters(QtW.QWidget):
 
     def __init__(self, **kwargs):  # noqa: PLR0915
         super().__init__()
-        self.date_label = QtW.QLabel("date")
         self.date_edit = QtW.QLineEdit(self)
-        self.ra_label = QtW.QLabel("ra")
+        self.obsid_edit = QtW.QLineEdit(self)
         self.ra_edit = QtW.QLineEdit(self)
-        self.dec_label = QtW.QLabel("dec")
         self.dec_edit = QtW.QLineEdit(self)
-        self.roll_label = QtW.QLabel("roll")
         self.roll_edit = QtW.QLineEdit(self)
-        self.n_guide_label = QtW.QLabel("n_guide")
         self.n_guide_edit = QtW.QLineEdit(self)
-        self.n_fid_label = QtW.QLabel("n_fid")
         self.n_fid_edit = QtW.QLineEdit(self)
-        self.n_t_ccd_label = QtW.QLabel("t_ccd")
         self.n_t_ccd_edit = QtW.QLineEdit(self)
-        self.instrument_label = QtW.QLabel("instrument")
+        self.man_angle_edit = QtW.QLineEdit(self)
         self.instrument_edit = QtW.QComboBox(self)
         self.instrument_edit.addItems(["ACIS-S", "ACIS-I", "HRC-S", "HRC-I"])
         self.do = QtW.QPushButton("Get Catalog")
@@ -69,26 +63,74 @@ class Parameters(QtW.QWidget):
             "acq": QtW.QListWidget(self),
             "guide": QtW.QListWidget(self),
         }
-        v_layout = QtW.QVBoxLayout(self)
-        layout = QtW.QGridLayout()
-        layout.addWidget(self.date_label, 0, 0)
-        layout.addWidget(self.date_edit, 0, 1)
-        layout.addWidget(self.ra_label, 1, 0)
-        layout.addWidget(self.ra_edit, 1, 1)
-        layout.addWidget(self.dec_label, 2, 0)
-        layout.addWidget(self.dec_edit, 2, 1)
-        layout.addWidget(self.roll_label, 3, 0)
-        layout.addWidget(self.roll_edit, 3, 1)
-        layout.addWidget(self.n_guide_label, 4, 0)
-        layout.addWidget(self.n_guide_edit, 4, 1)
-        layout.addWidget(self.n_fid_label, 5, 0)
-        layout.addWidget(self.n_fid_edit, 5, 1)
-        layout.addWidget(self.n_t_ccd_label, 6, 0)
-        layout.addWidget(self.n_t_ccd_edit, 6, 1)
-        layout.addWidget(self.instrument_label, 7, 0)
-        layout.addWidget(self.instrument_edit, 7, 1)
-        layout.addWidget(self.do, 8, 1)
-        layout.addWidget(self.run_sparkles_button, 9, 1)
+        self.dither_acq_y_edit = QtW.QLineEdit(self)
+        self.dither_acq_z_edit = QtW.QLineEdit(self)
+        self.dither_guide_y_edit = QtW.QLineEdit(self)
+        self.dither_guide_z_edit = QtW.QLineEdit(self)
+
+        layout = QtW.QHBoxLayout()
+
+        info_group_box = QtW.QGroupBox()
+        info_group_box_layout = QtW.QGridLayout()
+        info_group_box_layout.addWidget(QtW.QLabel("OBSID"), 0, 0, 1, 1)
+        info_group_box_layout.addWidget(self.obsid_edit, 0, 1, 1, 2)
+        info_group_box_layout.addWidget(QtW.QLabel("date"), 1, 0, 1, 1)
+        info_group_box_layout.addWidget(self.date_edit, 1, 1, 1, 2)
+        info_group_box_layout.addWidget(QtW.QLabel("instrument"), 2, 0, 1, 1)
+        info_group_box_layout.addWidget(self.instrument_edit, 2, 1, 1, 2)
+        for i in range(3):
+            info_group_box_layout.setColumnStretch(i, 2)
+
+        info_group_box.setLayout(info_group_box_layout)
+
+        layout.addWidget(info_group_box)
+
+        attitude_group_box = QtW.QWidget()
+        attitude_group_box_layout = QtW.QGridLayout()
+        attitude_group_box_layout.addWidget(QtW.QLabel("ra"), 0, 0, 1, 1)
+        attitude_group_box_layout.addWidget(QtW.QLabel("dec"), 1, 0, 1, 1)
+        attitude_group_box_layout.addWidget(QtW.QLabel("roll"), 2, 0, 1, 1)
+        attitude_group_box_layout.addWidget(self.ra_edit, 0, 1, 1, 1)
+        attitude_group_box_layout.addWidget(self.dec_edit, 1, 1, 1, 1)
+        attitude_group_box_layout.addWidget(self.roll_edit, 2, 1, 1, 1)
+        attitude_group_box.setLayout(attitude_group_box_layout)
+        for i in range(3):
+            attitude_group_box_layout.setColumnStretch(i, 10)
+
+        info_2_group_box = QtW.QWidget()
+        info_2_group_box_layout = QtW.QGridLayout()
+        info_2_group_box_layout.addWidget(QtW.QLabel("n_guide"), 0, 0, 1, 1)
+        info_2_group_box_layout.addWidget(self.n_guide_edit, 0, 1, 1, 1)
+        info_2_group_box_layout.addWidget(QtW.QLabel("n_fid"), 0, 2, 1, 1)
+        info_2_group_box_layout.addWidget(self.n_fid_edit, 0, 3, 1, 1)
+        info_2_group_box_layout.addWidget(QtW.QLabel("t_ccd"), 1, 0, 1, 1)
+        info_2_group_box_layout.addWidget(self.n_t_ccd_edit, 1, 1, 1, 1)
+        info_2_group_box_layout.addWidget(QtW.QLabel("Man. angle"), 1, 2, 1, 1)
+        info_2_group_box_layout.addWidget(self.man_angle_edit, 1, 3, 1, 1)
+        info_2_group_box.setLayout(info_2_group_box_layout)
+        for i in range(4):
+            info_2_group_box_layout.setColumnStretch(i, 1)
+
+        dither_group_box = QtW.QWidget()
+        dither_group_box_layout = QtW.QGridLayout()
+        dither_group_box_layout.addWidget(QtW.QLabel(""), 0, 0, 1, 4)
+        dither_group_box_layout.addWidget(QtW.QLabel("y"), 0, 4, 1, 4)
+        dither_group_box_layout.addWidget(QtW.QLabel("z"), 0, 8, 1, 4)
+        dither_group_box_layout.addWidget(QtW.QLabel("acq"), 1, 0, 1, 4)
+        dither_group_box_layout.addWidget(self.dither_acq_y_edit, 1, 4, 1, 4)
+        dither_group_box_layout.addWidget(self.dither_acq_z_edit, 1, 8, 1, 4)
+
+        dither_group_box_layout.addWidget(QtW.QLabel("guide"), 2, 0, 1, 4)
+        dither_group_box_layout.addWidget(self.dither_guide_y_edit, 2, 4, 1, 4)
+        dither_group_box_layout.addWidget(self.dither_guide_z_edit, 2, 8, 1, 4)
+        dither_group_box.setLayout(dither_group_box_layout)
+
+        tab_2 = QtW.QTabWidget()
+        tab_2.addTab(attitude_group_box, "Attitude")
+        tab_2.addTab(dither_group_box, "Dither")
+        tab_2.addTab(info_2_group_box, "Other")
+        tab_2.setCurrentIndex(0)
+        layout.addWidget(tab_2)
 
         tab = QtW.QTabWidget()
         tab.addTab(self.include["acq"], "Include Acq.")
@@ -96,10 +138,15 @@ class Parameters(QtW.QWidget):
         tab.addTab(self.include["guide"], "Include Guide")
         tab.addTab(self.exclude["guide"], "Exclude Guide")
         tab.setCurrentIndex(0)
-        layout.addWidget(tab, 10, 0, 1, 2)
+        layout.addWidget(tab)
 
-        v_layout.addLayout(layout)
-        v_layout.addStretch(0)
+        controls_group_box = QtW.QGroupBox()
+        controls_group_box_layout = QtW.QVBoxLayout()
+        controls_group_box_layout.addWidget(self.do)
+        controls_group_box_layout.addWidget(self.run_sparkles_button)
+        controls_group_box.setLayout(controls_group_box_layout)
+
+        layout.addWidget(controls_group_box)
 
         file = kwargs.pop("file", None)
         if file:
@@ -137,6 +184,22 @@ class Parameters(QtW.QWidget):
             kwargs["n_guide"] = "8"
 
         pprint(kwargs)
+        self.obsid_edit.setText(f"{kwargs.get('obsid', params.get('obsid', 0))}")
+        self.man_angle_edit.setText(
+            f"{kwargs.get('man_angle', params.get('man_angle', 0))}"
+        )
+        self.dither_acq_y_edit.setText(
+            f"{kwargs.get('dither_acq_y', params.get('dither_acq_y', 16))}"
+        )
+        self.dither_acq_z_edit.setText(
+            f"{kwargs.get('dither_acq_z', params.get('dither_acq_z', 16))}"
+        )
+        self.dither_guide_y_edit.setText(
+            f"{kwargs.get('dither_guide_y', params.get('dither_guide_y', 16))}"
+        )
+        self.dither_guide_z_edit.setText(
+            f"{kwargs.get('dither_guide_z', params.get('dither_guide_z', 16))}"
+        )
         self.date_edit.setText(kwargs.get("date", params["date"]))
         self.ra_edit.setText(f"{kwargs.get('ra', params['attitude'].ra):.8f}")
         self.dec_edit.setText(f"{kwargs.get('dec', params['attitude'].dec):.8f}")
@@ -148,7 +211,7 @@ class Parameters(QtW.QWidget):
             kwargs.get("instrument", params["instrument"])
         )
 
-        self.setLayout(v_layout)
+        self.setLayout(layout)
 
         self.values = self._validate()
         self.do.clicked.connect(self._do_it)
@@ -164,7 +227,7 @@ class Parameters(QtW.QWidget):
         try:
             n_fid = int(self.n_fid_edit.text())
             n_guide = int(self.n_guide_edit.text())
-            obsid = 0 if n_fid else 38000
+            obsid = int(self.obsid_edit.text())
             assert self.date_edit.text() != "", "No date"
             assert self.ra_edit.text() != "", "No RA"
             assert self.dec_edit.text() != "", "No dec"
@@ -202,6 +265,15 @@ class Parameters(QtW.QWidget):
                     int(self.include["guide"].item(i).text())
                     for i in range(self.include["guide"].count())
                 ],
+                "dither_acq": (
+                    int(self.dither_acq_y_edit.text()),
+                    int(self.dither_acq_z_edit.text()),
+                ),
+                "dither_guide": (
+                    int(self.dither_guide_y_edit.text()),
+                    int(self.dither_guide_z_edit.text()),
+                ),
+                "man_angle": float(self.man_angle_edit.text()),
             }
         except Exception as e:
             if not quiet:
