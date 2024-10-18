@@ -201,9 +201,9 @@ class Parameters(QtW.QWidget):
             f"{kwargs.get('dither_guide_z', params.get('dither_guide_z', 16))}"
         )
         self.date_edit.setText(kwargs.get("date", params["date"]))
-        self.ra_edit.setText(f"{kwargs.get('ra', params['attitude'].ra):.8f}")
-        self.dec_edit.setText(f"{kwargs.get('dec', params['attitude'].dec):.8f}")
-        self.roll_edit.setText(f"{kwargs.get('roll', params['attitude'].roll):.8f}")
+        self.ra_edit.setText(f"{kwargs.get('ra', params['attitude'].ra):.5f}")
+        self.dec_edit.setText(f"{kwargs.get('dec', params['attitude'].dec):.5f}")
+        self.roll_edit.setText(f"{kwargs.get('roll', params['attitude'].roll):.5f}")
         self.n_guide_edit.setText(f"{kwargs['n_guide']}")
         self.n_fid_edit.setText(f"{kwargs['n_fid']}")
         self.n_t_ccd_edit.setText(kwargs.get("t_ccd", f"{params['t_ccd']:.2f}"))
