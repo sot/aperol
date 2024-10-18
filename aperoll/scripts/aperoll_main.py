@@ -11,9 +11,7 @@ def get_parser():
 
     parse = argparse.ArgumentParser()
     parse.add_argument("file", nargs="?", default=None)
-    parse.add_argument("--date")
-    parse.add_argument("--ra")
-    parse.add_argument("--dec")
+    parse.add_argument("--obsid", type=int)
     return parse
 
 

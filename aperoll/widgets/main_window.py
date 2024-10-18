@@ -1,4 +1,7 @@
 # from PyQt5 import QtCore as QtC, QtWidgets as QtW, QtGui as QtG
+import os
+import pickle
+import tarfile
 from pathlib import Path
 from pprint import pprint
 from tempfile import TemporaryDirectory
@@ -12,6 +15,7 @@ from cxotime import CxoTime
 from proseco import get_aca_catalog
 from PyQt5 import QtCore as QtC
 from Quaternion import Quat
+from ska_helpers import utils
 
 from .parameters import Parameters
 from .star_plot import StarPlot
@@ -97,18 +101,28 @@ class WebPage(QtWe.QWebEnginePage):
         page.deleteLater()
 
 
-class MainWindow(QtW.QWidget):
+class MainWindow(QtW.QMainWindow):
     def __init__(self, opts=None):
         super().__init__()
         opts = {} if opts is None else opts
         opts = {k: opts[k] for k in opts if opts[k] is not None}
 
         pprint(opts)
+        self._main = QtW.QWidget()
+        self.setCentralWidget(self._main)
+
+        self.menu_bar = QtW.QMenuBar()
+        self.setMenuBar(self.menu_bar)
+
+        self.fileMenu = self.menu_bar.addMenu("&File")
+        export_action = QtW.QAction("&Export Pickle", self)
+        export_action.triggered.connect(self._export_proseco)
+        self.fileMenu.addAction(export_action)
+        export_action = QtW.QAction("&Export Sparkles", self)
+        export_action.triggered.connect(self._export_sparkles)
+        self.fileMenu.addAction(export_action)
 
         self.web_page = None
-
-        self._tmp_dir = TemporaryDirectory()
-        self._dir = Path(self._tmp_dir.name)
 
         self.plot = StarPlot()
         self.parameters = Parameters(**opts)
@@ -117,7 +131,7 @@ class MainWindow(QtW.QWidget):
         font.setPixelSize(5)  # setting a pixel size so it can be changed later
         self.textEdit.setFont(font)
 
-        layout = QtW.QVBoxLayout(self)
+        layout = QtW.QVBoxLayout(self._main)
         layout_2 = QtW.QHBoxLayout()
 
         layout.addWidget(self.parameters)
@@ -127,7 +141,7 @@ class MainWindow(QtW.QWidget):
 
         layout.setStretch(0, 1)  # the dialog on top should not stretch much
         layout.setStretch(1, 10)
-        self.setLayout(layout)
+        self._main.setLayout(layout)
 
         self.plot.include_star.connect(self.parameters.include_star)
         # self.plot.exclude_star.connect(self.parameters.exclude_star)
@@ -135,7 +149,11 @@ class MainWindow(QtW.QWidget):
         self.parameters.do_it.connect(self._run_proseco)
         self.parameters.run_sparkles.connect(self._run_sparkles)
         self.parameters.draw_test.connect(self._draw_test)
+        self.parameters.parameters_changed.connect(self._parameters_changed)
         self.plot.attitude_changed.connect(self.parameters.set_ra_dec)
+
+        self._data = Data(self.parameters.proseco_args())
+        self.outdir = Path(os.getcwd())
 
         self._init()
 
@@ -145,22 +163,17 @@ class MainWindow(QtW.QWidget):
             self.web_page = None
         event.accept()
 
+    def _parameters_changed(self):
+        self._data.reset(self.parameters.proseco_args())
+
     def _init(self):
         if self.parameters.values:
-            # obsid = self.parameters.values["obsid"]
             ra, dec = self.parameters.values["ra"], self.parameters.values["dec"]
             roll = self.parameters.values["roll"]
             time = CxoTime(self.parameters.values["date"])
-
-            # aca_attitude = calc_aca_from_targ(
-            #     Quat(equatorial=(float(ra / u.deg), float(dec / u.deg), nominal_roll)),
-            #     0,
-            #     0
-            # )
             aca_attitude = Quat(
                 equatorial=(float(ra / u.deg), float(dec / u.deg), roll)
             )
-            # print("ra, dec, roll =", (float(ra / u.deg), float(dec / u.deg), roll))
             self.plot.set_base_attitude(aca_attitude, update=False)
             self.plot.set_time(time, update=True)
 
@@ -171,63 +184,74 @@ class MainWindow(QtW.QWidget):
             aca_attitude = Quat(
                 equatorial=(float(ra / u.deg), float(dec / u.deg), roll)
             )
-            # self.plot.show_test_stars_q(aca_attitude)
             dq = self.plot._base_attitude.dq(aca_attitude)
             self.plot.show_test_stars(
                 ra_offset=dq.ra, dec_offset=dq.dec, roll_offset=dq.roll
             )
 
-    def _proseco_args(self):
-        obsid = self.parameters.values["obsid"]
-        ra, dec = self.parameters.values["ra"], self.parameters.values["dec"]
-        roll = self.parameters.values["roll"]
-        time = CxoTime(self.parameters.values["date"])
-
-        aca_attitude = Quat(equatorial=(float(ra / u.deg), float(dec / u.deg), roll))
-
-        args = {
-            "obsid": obsid,
-            "att": aca_attitude,
-            "date": time,
-            "n_fid": self.parameters.values["n_fid"],
-            "n_guide": self.parameters.values["n_guide"],
-            "dither_acq": self.parameters.values["dither_acq"],
-            "dither_guide": self.parameters.values["dither_guide"],
-            "t_ccd_acq": self.parameters.values["t_ccd"],
-            "t_ccd_guide": self.parameters.values["t_ccd"],
-            "man_angle": self.parameters.values["man_angle"],
-            "detector": self.parameters.values["instrument"],
-            "sim_offset": 0,  # docs say this is optional, but it does not seem to be
-            "focus_offset": 0,  # docs say this is optional, but it does not seem to be
-        }
-
-        for key in [
-            "exclude_ids_guide",
-            "include_ids_guide",
-            "exclude_ids_acq",
-            "include_ids_acq",
-        ]:
-            if self.parameters.values[key]:
-                args[key] = self.parameters.values[key]
-
-        return args
-
     def _run_proseco(self):
-        print("parameters:", self.parameters.values)
-        if self.parameters.values:
-            args = self._proseco_args()
-            pprint(args)
-            catalog = get_aca_catalog(**args)
-            self.plot.set_catalog(catalog, update=False)
+        """
+        Display the star catalog.
+        """
+        if self._data.proseco:
+            self.textEdit.setText(
+                f"{STYLE}<pre>{self._data.proseco['aca'].get_text_pre()}</pre>"
+            )
+            self.plot.set_catalog(self._data.proseco["catalog"], update=False)
 
-            aca = catalog.get_review_table()
+    def _export_proseco(self):
+        """
+        Save the star catalog in a pickle file.
+        """
+        if self._data.proseco:
+            catalog = self._data.proseco["catalog"]
+            dialog = QtW.QFileDialog(
+                self,
+                "Export Pickle",
+                str(self.outdir / f"aperoll-obsid_{catalog.obsid:.0f}.pkl"),
+            )
+            dialog.setAcceptMode(QtW.QFileDialog.AcceptSave)
+            dialog.setDefaultSuffix("pkl")
+            rc = dialog.exec()
+            if rc:
+                self._data.export_proseco(dialog.selectedFiles()[0])
 
-            sparkles.core.check_catalog(aca)
+    def _export_sparkles(self):
+        """
+        Save the sparkles report to a tarball.
+        """
+        if self._data.sparkles:
+            catalog = self._data.proseco["catalog"]
+            # for some reason, the extension hidden but it works
+            dialog = QtW.QFileDialog(
+                self,
+                "Export Pickle",
+                str(self.outdir / f"aperoll-obsid_{catalog.obsid:.0f}.tgz"),
+            )
+            dialog.setAcceptMode(QtW.QFileDialog.AcceptSave)
+            dialog.setDefaultSuffix(".tgz")
+            rc = dialog.exec()
+            if rc:
+                self._data.export_sparkles(dialog.selectedFiles()[0])
 
-            # aca.messages
-
-            # self.textEdit.setText(table_to_html(catalog))
-            self.textEdit.setText(f"{STYLE}<pre>{aca.get_text_pre()}</pre>")
+    def _run_sparkles(self):
+        """
+        Display the sparkles report in a web browser.
+        """
+        if self._data.sparkles:
+            try:
+                w = QtW.QMainWindow(self)
+                w.resize(1400, 1000)
+                web = QtWe.QWebEngineView(w)
+                w.setCentralWidget(web)
+                self.web_page = WebPage()
+                web.setPage(self.web_page)
+                url = self._data.sparkles / "index.html"
+                web.load(QtC.QUrl(f"file://{url}"))
+                web.show()
+                w.show()
+            except Exception as e:
+                print(e)
 
     def resizeEvent(self, _size):
         font = self.textEdit.font()
@@ -247,33 +271,82 @@ class MainWindow(QtW.QWidget):
             font.setPixelSize(pix_size)
         self.textEdit.setFont(font)
 
-    def _run_sparkles(self):
-        # print("parameters:", self.parameters.values)
-        if self.parameters.values:
-            args = self._proseco_args()
-            pprint(args)
-            catalog = get_aca_catalog(**args)
 
+class CachedVal:
+    def __init__(self, func):
+        self._func = func
+        self.reset()
+
+    def reset(self):
+        self._value = utils.LazyVal(self._func)
+
+    @property
+    def val(self):
+        return self._value.val
+
+
+class Data:
+    def __init__(self, parameters=None) -> None:
+        self._proseco = CachedVal(self.run_proseco)
+        self._sparkles = CachedVal(self.run_sparkles)
+        self.parameters = parameters
+        self._tmp_dir = TemporaryDirectory()
+        self._dir = Path(self._tmp_dir.name)
+
+    def reset(self, parameters):
+        self.parameters = parameters
+        self._proseco.reset()
+        self._sparkles.reset()
+
+    @property
+    def proseco(self):
+        return self._proseco.val
+
+    @property
+    def sparkles(self):
+        return self._sparkles.val
+
+    def export_proseco(self, outfile):
+        if self.proseco:
+            outfile = self._dir / outfile
+            catalog = self.proseco["catalog"]
+            if catalog:
+                with open(outfile, "wb") as fh:
+                    pickle.dump({catalog.obsid: catalog}, fh)
+
+    def export_sparkles(self, outfile):
+        if self.sparkles:
+            outfile = self._dir / outfile
+            if self.sparkles:
+                dest = Path(outfile.name.replace(".tar", "").replace(".gz", ""))
+                with tarfile.open(outfile, "w") as tar:
+                    for name in self.sparkles.glob("**/*"):
+                        tar.add(
+                            name,
+                            arcname=dest / name.relative_to(self._dir / "sparkles"),
+                        )
+
+    def run_proseco(self):
+        # print("parameters:", self.parameters)
+        if self.parameters:
+            pprint(self.parameters)
+            catalog = get_aca_catalog(**self.parameters)
+            aca = catalog.get_review_table()
+            sparkles.core.check_catalog(aca)
+
+            return {
+                "catalog": catalog,
+                "aca": aca,
+            }
+        return {}
+
+    def run_sparkles(self):
+        if self.proseco and self.proseco["catalog"]:
             sparkles.run_aca_review(
                 "Exploration",
-                acars=[catalog.get_review_table()],
+                acars=[self.proseco["catalog"].get_review_table()],
                 report_dir=self._dir / "sparkles",
                 report_level="all",
                 roll_level="none",
             )
-            print(f"sparkles report at {self._dir / 'sparkles'}")
-            try:
-                w = QtW.QMainWindow(self)
-                w.resize(1400, 1000)
-                web = QtWe.QWebEngineView(w)
-                w.setCentralWidget(web)
-                self.web_page = WebPage()
-                web.setPage(self.web_page)
-                url = self._dir / "sparkles" / "index.html"
-                web.load(QtC.QUrl(f"file://{url}"))
-                web.show()
-                w.show()
-            except Exception as e:
-                print(e)
-
-            self.plot.set_catalog(catalog, update=False)
+            return self._dir / "sparkles"
