@@ -507,6 +507,7 @@ class StarPlot(QtW.QWidget):
 
     def show_stars(self):
         self.scene.clear()
+        self._catalog_items = []
         if self._base_attitude is None or self._time is None:
             return
         self.stars = get_stars(self._time, self._base_attitude)
