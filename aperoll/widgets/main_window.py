@@ -158,6 +158,29 @@ class MainWindow(QtW.QMainWindow):
 
         self._init()
 
+        starcat = None
+        if "file" in opts:
+            filename = opts.get("file")
+            catalogs = {}
+            if filename.endswith(".pkl"):
+                with open(filename, "rb") as fh:
+                    catalogs = pickle.load(fh)
+            elif filename.endswith(".pkl.gz"):
+                with gzip.open(filename, "rb") as fh:
+                    catalogs = pickle.load(fh)
+            if catalogs:
+                obsids = [int(np.round(float(k))) for k in catalogs]
+                if "obsid" not in opts or opts["obsid"] is None:
+                    starcat = catalogs[obsids[0]]
+                else:
+                    starcat = catalogs[opts["obsid"]]
+                aca = starcat.get_review_table()
+                sparkles.core.check_catalog(aca)
+
+        if starcat is not None:
+            self.plot.set_catalog(starcat, update=False)
+            self.starcat_view.set_catalog(aca)
+
     def closeEvent(self, event):
         if self.web_page is not None:
             del self.web_page
