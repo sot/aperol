@@ -6,7 +6,6 @@ from pathlib import Path
 from pprint import pprint
 from tempfile import TemporaryDirectory
 
-import PyQt5.QtGui as QtG
 import PyQt5.QtWebEngineWidgets as QtWe
 import PyQt5.QtWidgets as QtW
 import sparkles
@@ -19,6 +18,7 @@ from ska_helpers import utils
 
 from .parameters import Parameters
 from .star_plot import StarPlot
+from .starcat_view import StarcatView
 
 STYLE = """
   <style>
@@ -126,16 +126,13 @@ class MainWindow(QtW.QMainWindow):
 
         self.plot = StarPlot()
         self.parameters = Parameters(**opts)
-        self.textEdit = QtW.QTextEdit()
-        font = QtG.QFont("Courier New")  # setting a fixed-width font (close enough)
-        font.setPixelSize(5)  # setting a pixel size so it can be changed later
-        self.textEdit.setFont(font)
+        self.starcat_view = StarcatView()
 
         layout = QtW.QVBoxLayout(self._main)
         layout_2 = QtW.QHBoxLayout()
 
         layout.addWidget(self.parameters)
-        layout_2.addWidget(self.textEdit)
+        layout_2.addWidget(self.starcat_view)
         layout_2.addWidget(self.plot)
         layout.addLayout(layout_2)
 
@@ -194,9 +191,7 @@ class MainWindow(QtW.QMainWindow):
         Display the star catalog.
         """
         if self._data.proseco:
-            self.textEdit.setText(
-                f"{STYLE}<pre>{self._data.proseco['aca'].get_text_pre()}</pre>"
-            )
+            self.starcat_view.set_catalog(self._data.proseco["aca"])
             self.plot.set_catalog(self._data.proseco["catalog"], update=False)
 
     def _export_proseco(self):
@@ -252,24 +247,6 @@ class MainWindow(QtW.QMainWindow):
                 w.show()
             except Exception as e:
                 print(e)
-
-    def resizeEvent(self, _size):
-        font = self.textEdit.font()
-        header = (
-            "idx slot    id    type  sz p_acq  mag  mag_err "
-            "maxmag   yang    zang   row    col   dim res halfw"
-        )
-        n_lines = 35
-        scale_x = float(0.9 * self.textEdit.width()) / QtG.QFontMetrics(font).width(
-            header
-        )
-        scale_y = float(0.9 * self.textEdit.height()) / (
-            n_lines * QtG.QFontMetrics(font).height()
-        )
-        pix_size = int(font.pixelSize() * min(scale_x, scale_y))
-        if pix_size > 0:
-            font.setPixelSize(pix_size)
-        self.textEdit.setFont(font)
 
 
 class CachedVal:
