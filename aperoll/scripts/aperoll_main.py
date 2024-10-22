@@ -12,7 +12,7 @@ def get_parser():
 
     parse = argparse.ArgumentParser()
     parse.add_argument("file", nargs="?", default=None)
-    parse.add_argument("--obsid", type=int)
+    parse.add_argument("--obsid", help="Specify the OBSID", type=int)
     levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     levels = [lvl.lower() for lvl in levels]
     parse.add_argument(

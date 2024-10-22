@@ -4,6 +4,7 @@ import pickle
 from pprint import pformat
 
 import maude
+import numpy as np
 import Ska.Sun as sun
 from astropy import units as u
 from cxotime.cxotime import CxoTime
@@ -21,6 +22,7 @@ class LineEdit(QtW.QLineEdit):
 
     The signal is emitted only if the text changed.
     """
+
     value_changed = QtC.pyqtSignal(str)
 
     def __init__(self, parent):
@@ -158,6 +160,10 @@ def get_parameters_from_pickle(filename, obsid=None):
 
     if not catalogs:
         raise AperollException(f"No entries found in {filename}")
+
+    if obsid is None:
+        # this is ugly but it works whether the keys are strings of floats or ints
+        obsid = int(np.round(float(list(catalogs.keys())[0])))
 
     if float(obsid) not in catalogs:
         raise AperollException(f"OBSID {obsid} not found in {filename}")
@@ -347,6 +353,9 @@ class Parameters(QtW.QWidget):
             )
         else:
             params = get_default_parameters()
+            # obsid is a command-line argument, so I set it here
+            if "obsid" in kwargs:
+                params["obsid"] = kwargs["obsid"]
 
         logger.debug(pformat(params))
         self.obsid_edit.setText(f"{params['obsid']}")

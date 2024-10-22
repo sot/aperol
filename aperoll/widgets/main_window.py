@@ -1,10 +1,12 @@
 # from PyQt5 import QtCore as QtC, QtWidgets as QtW, QtGui as QtG
+import gzip
 import os
 import pickle
 import tarfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
 import PyQt5.QtWebEngineWidgets as QtWe
 import PyQt5.QtWidgets as QtW
 import sparkles
@@ -103,12 +105,10 @@ class WebPage(QtWe.QWebEnginePage):
 
 
 class MainWindow(QtW.QMainWindow):
-    def __init__(self, opts=None):
+    def __init__(self, opts=None):  # noqa: PLR0915
         super().__init__()
         opts = {} if opts is None else opts
         opts = {k: opts[k] for k in opts if opts[k] is not None}
-
-        pprint(opts)
 
         self.opts = opts
 
@@ -207,7 +207,6 @@ class MainWindow(QtW.QMainWindow):
         self.starcat_view.reset()
         self._data.reset(self.parameters.proseco_args())
         self._init()
-
 
     def _draw_test(self):
         if self.parameters.values:
