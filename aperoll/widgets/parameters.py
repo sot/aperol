@@ -1,7 +1,7 @@
 import gzip
 import json
 import pickle
-from pprint import pprint
+from pprint import pformat
 
 import maude
 import Ska.Sun as sun
@@ -11,6 +11,8 @@ from kadi.commands.observations import get_detector_and_sim_offset
 from PyQt5 import QtCore as QtC
 from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
+
+from aperoll.utils import AperollException, logger
 
 
 class LineEdit(QtW.QLineEdit):
@@ -89,10 +91,10 @@ def get_parameters_from_yoshi(filename, obsid=None):
         if obsid is not None:
             contents = [obs for obs in contents if obs["obsid"] == obsid]
             if not contents:
-                raise Exception(f"OBSID {obsid} not found in {filename}")
+                raise AperollException(f"OBSID {obsid} not found in {filename}")
 
         if not contents:
-            raise Exception(f"No entries found in {filename}")
+            raise AperollException(f"No entries found in {filename}")
 
         yoshi_params = contents[0]  # assuming there is only one entry
 
@@ -154,8 +156,11 @@ def get_parameters_from_pickle(filename, obsid=None):
     with open_fcn(filename, "rb") as fh:
         catalogs = pickle.load(fh)
 
+    if not catalogs:
+        raise AperollException(f"No entries found in {filename}")
+
     if float(obsid) not in catalogs:
-        raise Exception(f"OBSID {obsid} not found in {filename}")
+        raise AperollException(f"OBSID {obsid} not found in {filename}")
 
     catalog = catalogs[float(obsid)]
 
@@ -343,7 +348,7 @@ class Parameters(QtW.QWidget):
         else:
             params = get_default_parameters()
 
-        pprint(params)
+        logger.debug(pformat(params))
         self.obsid_edit.setText(f"{params['obsid']}")
         self.man_angle_edit.setText(f"{params['man_angle']}")
         self.dither_acq_y_edit.setText(f"{params['dither_acq_y']}")
@@ -426,7 +431,7 @@ class Parameters(QtW.QWidget):
             }
         except Exception as e:
             if not quiet:
-                print(e)
+                logger.warning(e)
             return {}
 
     def _do_it(self):

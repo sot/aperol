@@ -3,7 +3,6 @@ import os
 import pickle
 import tarfile
 from pathlib import Path
-from pprint import pprint
 from tempfile import TemporaryDirectory
 
 import PyQt5.QtWebEngineWidgets as QtWe
@@ -15,6 +14,8 @@ from proseco import get_aca_catalog
 from PyQt5 import QtCore as QtC
 from Quaternion import Quat
 from ska_helpers import utils
+
+from aperoll.utils import logger
 
 from .parameters import Parameters
 from .star_plot import StarPlot
@@ -280,7 +281,7 @@ class MainWindow(QtW.QMainWindow):
                 web.show()
                 w.show()
             except Exception as e:
-                print(e)
+                logger.warning(e)
 
 
 class CachedVal:
@@ -338,9 +339,7 @@ class Data:
                         )
 
     def run_proseco(self):
-        # print("parameters:", self.parameters)
         if self.parameters:
-            pprint(self.parameters)
             catalog = get_aca_catalog(**self.parameters)
             aca = catalog.get_review_table()
             sparkles.core.check_catalog(aca)
