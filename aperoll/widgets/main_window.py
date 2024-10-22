@@ -108,6 +108,9 @@ class MainWindow(QtW.QMainWindow):
         opts = {k: opts[k] for k in opts if opts[k] is not None}
 
         pprint(opts)
+
+        self.opts = opts
+
         self._main = QtW.QWidget()
         self.setCentralWidget(self._main)
 
@@ -145,6 +148,7 @@ class MainWindow(QtW.QMainWindow):
 
         self.parameters.do_it.connect(self._run_proseco)
         self.parameters.run_sparkles.connect(self._run_sparkles)
+        self.parameters.reset.connect(self._reset)
         self.parameters.draw_test.connect(self._draw_test)
         self.parameters.parameters_changed.connect(self._parameters_changed)
         self.plot.attitude_changed.connect(self.parameters.set_ra_dec)
@@ -173,6 +177,13 @@ class MainWindow(QtW.QMainWindow):
             )
             self.plot.set_base_attitude(aca_attitude, update=False)
             self.plot.set_time(time, update=True)
+
+    def _reset(self):
+        self.parameters.set_parameters(**self.opts)
+        self.starcat_view.reset()
+        self._data.reset(self.parameters.proseco_args())
+        self._init()
+
 
     def _draw_test(self):
         if self.parameters.values:
