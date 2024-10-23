@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    uses: sot/skare3/.github/workflows/package_build.yml@master
+    uses: sot/skare3/.github/workflows/package_build.yml@aperoll
     with:
       noarch: false
     secrets:
