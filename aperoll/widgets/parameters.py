@@ -177,7 +177,9 @@ def get_parameters_from_pickle(filename, obsid=None):
         "dither_acq_z": catalog.dither_acq.z,
         "dither_guide_y": catalog.dither_guide.y,
         "dither_guide_z": catalog.dither_guide.z,
-        "date": CxoTime(catalog.date).date,  # date is not guaranteed to be a fixed type in pickle
+        "date": CxoTime(
+            catalog.date
+        ).date,  # date is not guaranteed to be a fixed type in pickle
         "attitude": catalog.att,
         "ra": catalog.att.ra,
         "dec": catalog.att.dec,
