@@ -44,11 +44,75 @@ def get_stars(starcat_time, quaternion, radius=2):
     return stars
 
 
+class Star(QtW.QGraphicsEllipseItem):
+    def __init__(self, star, parent=None, highlight=False):
+        s = symsize(star["MAG_ACA"])
+        # note that the coordinate system is (row, -col)
+        rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
+        super().__init__(rect, parent)
+        self.star = star
+        self.highlight = highlight
+        color = self.color()
+        self.setBrush(QtG.QBrush(color))
+        self.setPen(QtG.QPen(color))
+        self.included = {
+            "acq": None,
+            "guide": None,
+        }
+
+    def __repr__(self):
+        return f"Star({self.star['AGASC_ID']})"
+
+    def color(self):
+        if self.highlight:
+            return QtG.QColor("red")
+        if self.star["MAG_ACA"] > 10.5:
+            return QtG.QColor("lightGray")
+        if self.bad():
+            return QtG.QColor(255, 99, 71, 191)
+        return QtG.QColor("black")
+
+    def bad(self):
+        ok = (
+            (self.star["CLASS"] == 0)
+            & (self.star["MAG_ACA"] > 5.3)
+            & (self.star["MAG_ACA"] < 11.0)
+            & (~np.isclose(self.star["COLOR1"], 0.7))
+            & (self.star["MAG_ACA_ERR"] < 100.0)  # mag_err is in 0.01 mag
+            & (self.star["ASPQ1"] < 40)
+            & (  # Less than 2 arcsec centroid offset due to nearby spoiler
+                self.star["ASPQ2"] == 0
+            )
+            & (self.star["POS_ERR"] < 3000)  # Position error < 3.0 arcsec
+            & (
+                (self.star["VAR"] == -9999) | (self.star["VAR"] == 5)
+            )  # Not known to vary > 0.2 mag
+        )
+        return not ok
+
+    def text(self):
+        return (
+            "<pre>"
+            f"ID:      {self.star['AGASC_ID']}\n"
+            f"mag:     {self.star['MAG_ACA']:.2f} +- {self.star['MAG_ACA_ERR']/100:.2}\n"
+            f"color:   {self.star['COLOR1']:.2f}\n"
+            f"ASPQ1:   {self.star['ASPQ1']}\n"
+            f"ASPQ2:   {self.star['ASPQ2']}\n"
+            f"class:   {self.star['CLASS']}\n"
+            f"pos err: {self.star['POS_ERR']/1000} mas\n"
+            f"VAR:     {self.star['VAR']}"
+            "</pre>"
+        )
+
+
 class StarView(QtW.QGraphicsView):
     roll_changed = QtC.pyqtSignal(float)
+    include_star = QtC.pyqtSignal(int, str, object)
 
     def __init__(self, scene=None):
         super().__init__(scene)
+        # mouseTracking is set so we can show tooltips
+        self.setMouseTracking(True)
 
         self._start = None
         self._rotating = False
@@ -56,6 +120,15 @@ class StarView(QtW.QGraphicsView):
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
+
+        items = [item for item in self.items(event.pos()) if isinstance(item, Star)]
+        if items:
+            global_pos = event.globalPos()
+            # supposedly, the following should cause the tooltip to stay for a long time
+            # but it is the same
+            # QtW.QToolTip.showText(global_pos, items[0].text(), self, QtC.QRect(), 1000000000)
+            QtW.QToolTip.showText(global_pos, items[0].text())
+
         if self._start is None:
             return
 
@@ -95,12 +168,14 @@ class StarView(QtW.QGraphicsView):
             self._start = pos
 
     def mouseReleaseEvent(self, event):
-        self._start = None
+        if event.button() == QtC.Qt.LeftButton:
+            self._start = None
 
     def mousePressEvent(self, event):
-        self._moving = False
-        self._rotating = False
-        self._start = event.pos()
+        if event.button() == QtC.Qt.LeftButton:
+            self._moving = False
+            self._rotating = False
+            self._start = event.pos()
 
     def wheelEvent(self, event):
         scale = 1 + 0.5 * event.angleDelta().y() / 360
@@ -240,9 +315,47 @@ class StarView(QtW.QGraphicsView):
         transform = self.viewportTransform().rotate(-self.get_roll_offset())
         self.setTransform(transform)
 
+    def contextMenuEvent(self, event):
+        items = [item for item in self.items(event.pos()) if isinstance(item, Star)]
+        if not items:
+            return
+        item = items[0]
+
+        menu = QtW.QMenu()
+
+        incl_action = QtW.QAction("include acq", menu, checkable=True)
+        incl_action.setChecked(item.included["acq"] is True)
+        menu.addAction(incl_action)
+
+        excl_action = QtW.QAction("exclude acq", menu, checkable=True)
+        excl_action.setChecked(item.included["acq"] is False)
+        menu.addAction(excl_action)
+
+        incl_action = QtW.QAction("include guide", menu, checkable=True)
+        incl_action.setChecked(item.included["guide"] is True)
+        menu.addAction(incl_action)
+
+        excl_action = QtW.QAction("exclude guide", menu, checkable=True)
+        excl_action.setChecked(item.included["guide"] is False)
+        menu.addAction(excl_action)
+
+        result = menu.exec_(event.globalPos())
+        if result is not None:
+            action, action_type = result.text().split()
+            if items:
+                if action == "include":
+                    item.included[action_type] = True if result.isChecked() else None
+                elif action == "exclude":
+                    item.included[action_type] = False if result.isChecked() else None
+                self.include_star.emit(
+                    item.star["AGASC_ID"], action_type, item.included[action_type]
+                )
+        event.accept()
+
 
 class StarPlot(QtW.QWidget):
     attitude_changed = QtC.pyqtSignal(float, float, float)
+    include_star = QtC.pyqtSignal(int, str, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -268,7 +381,7 @@ class StarPlot(QtW.QWidget):
         # "current attitude" refers to the attitude taking into account the viewport's position
         self._current_attitude = None
         self._time = None
-        self._highlight = None
+        self._highlight = []
         self._catalog = None
 
         self._catalog_items = []
@@ -276,6 +389,8 @@ class StarPlot(QtW.QWidget):
 
         self.scene.sceneRectChanged.connect(self._radec_changed)
         self.view.roll_changed.connect(self._roll_changed)
+
+        self.view.include_star.connect(self.include_star)
 
     def _radec_changed(self):
         # RA/dec change when the scene rectangle changes, and its given by the rectangle's center
@@ -392,6 +507,7 @@ class StarPlot(QtW.QWidget):
 
     def show_stars(self):
         self.scene.clear()
+        self._catalog_items = []
         if self._base_attitude is None or self._time is None:
             return
         self.stars = get_stars(self._time, self._base_attitude)
@@ -401,17 +517,10 @@ class StarPlot(QtW.QWidget):
         )
         black_pen = QtG.QPen()
         black_pen.setWidth(2)
-        black_brush = QtG.QBrush(QtG.QColor("black"))
-        red_pen = QtG.QPen(QtG.QColor("red"))
-        red_brush = QtG.QBrush(QtG.QColor("red"))
         for star in self.stars:
-            s = symsize(star["MAG_ACA"])
-            # note that the coordinate system is (row, -col)
-            rect = QtC.QRectF(star["row"] - s / 2, -star["col"] - s / 2, s, s)
-            if self._highlight is not None and star["AGASC_ID"] in self._highlight:
-                self.scene.addEllipse(rect, red_pen, red_brush)
-            else:
-                self.scene.addEllipse(rect, black_pen, black_brush)
+            self.scene.addItem(
+                Star(star, highlight=star["AGASC_ID"] in self._highlight)
+            )
 
         # self.view.centerOn(QtC.QPointF(self._origin[0], self._origin[1]))
         self.view.re_center()
@@ -435,6 +544,14 @@ class StarPlot(QtW.QWidget):
             fids = cat[cat["type"] == "FID"]
             mon_wins = cat[cat["type"] == "MON"]
 
+            for star in cat:
+                txt = self.scene.addText(
+                    f"{star['idx']}",
+                    QtG.QFont("Arial", 32),
+                )
+                txt.setPos(star["row"] + 16, -star["col"] - 40)
+                txt.setDefaultTextColor(QtG.QColor("red"))
+                self._catalog_items.append(txt)
             for gui_star in gui_stars:
                 w = 20
                 # note that the coordinate system is (row, -col)
