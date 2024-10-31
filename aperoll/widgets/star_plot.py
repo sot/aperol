@@ -606,3 +606,21 @@ class StarPlot(QtW.QWidget):
                         QtG.QPen(QtG.QColor("red"), 3),
                     )
                 )
+
+
+def main():
+    from aperoll.widgets.parameters import get_default_parameters
+
+    params = get_default_parameters()
+
+    app = QtW.QApplication([])
+    w = StarPlot()
+    w.set_base_attitude(params["attitude"], update=False)
+    w.set_time(params["date"], update=True)
+    w.resize(1500, 1000)
+    w.show()
+    app.exec()
+
+
+if __name__ == "__main__":
+    main()
