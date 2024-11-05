@@ -17,6 +17,8 @@ from Quaternion import Quat
 CCD_ORIGIN = yagzag_to_pixels(
     0, 0
 )  # (6.08840495576943, 4.92618563916467) as of this writing
+# The (0,0) point of the CCD coordinates in (yag, zag)
+YZ_ORIGIN = pixels_to_yagzag(0, 0)
 
 
 def symsize(mag):
@@ -24,25 +26,19 @@ def symsize(mag):
     # mag 6 as 40 and mag 11 as 3
     # interp should leave it at the bounding value outside
     # the range
-    return np.interp(mag, [6.0, 11.0], [16.0, 4.0])
+    return np.interp(mag, [6.0, 11.0], [32.0, 8.0])
 
 
 def get_stars(starcat_time, quaternion, radius=2):
     stars = agasc.get_agasc_cone(
         quaternion.ra, quaternion.dec, radius=radius, date=starcat_time
     )
-
-    if "yang" not in stars.colnames or "zang" not in stars.colnames:
-        stars["yang"], stars["zang"] = radec_to_yagzag(
-            stars["RA_PMCORR"], stars["DEC_PMCORR"], quaternion
-        )
-
     return stars
 
 
 class Star(QtW.QGraphicsEllipseItem):
     def __init__(self, star, parent=None, highlight=False):
-        s = symsize(star["MAG_ACA"]) * 10
+        s = symsize(star["MAG_ACA"])
         rect = QtC.QRectF(-s / 2, -s / 2, s, s)
         super().__init__(rect, parent)
         self.star = star
@@ -117,13 +113,15 @@ class Catalog(QtW.QGraphicsItem):
         self.starcat = catalog.copy()  # will add some columns
 
         cat = Table(self.starcat)
+        # item positions are set from row/col
         cat["row"], cat["col"] = yagzag_to_pixels(
             cat["yang"], cat["zang"], allow_bad=True
         )
+        # when attitude changes, the positions (row, col) are recalculated from (ra, dec)
+        # so these items move with the corresponding star.
         cat["ra"], cat["dec"] = yagzag_to_radec(
             cat["yang"], cat["zang"], self.starcat.att
         )
-        cat["angle_halfw"] = cat["halfw"]
         gui_stars = cat[(cat["type"] == "GUI") | (cat["type"] == "BOT")]
         acq_stars = cat[(cat["type"] == "ACQ") | (cat["type"] == "BOT")]
         fids = cat[cat["type"] == "FID"]
@@ -154,7 +152,11 @@ class Catalog(QtW.QGraphicsItem):
             yag, zag = radec_to_yagzag(
                 item.starcat_row["ra"], item.starcat_row["dec"], attitude
             )
-            item.setPos(-yag, -zag)
+            row, col = yagzag_to_pixels(
+                yag, zag, allow_bad=True
+            )
+            # item.setPos(-yag, -zag)
+            item.setPos(row, -col)
 
     def boundingRect(self):
         return QtC.QRectF(0, 0, 1, 1)
@@ -170,16 +172,15 @@ class Catalog(QtW.QGraphicsItem):
 class FidLight(QtW.QGraphicsEllipseItem):
     def __init__(self, fid, parent=None):
         self.starcat_row = fid
-        s = 25
+        s = 27
         w = 3
-        s *= 5
-        w *= 5
         rect = QtC.QRectF(-s, -s, 2 * s, 2 * s)
         super().__init__(rect, parent)
         self.fid = fid
         pen = QtG.QPen(QtG.QColor("red"), w)
         self.setPen(pen)
-        self.setPos(-fid["yang"], -fid["zang"])
+        # self.setPos(-fid["yang"], -fid["zang"])
+        self.setPos(fid["row"], -fid["col"])
 
         line = QtW.QGraphicsLineItem(-s, 0, s, 0, self)
         line.setPen(pen)
@@ -191,10 +192,11 @@ class StarcatLabel(QtW.QGraphicsTextItem):
     def __init__(self, star, parent=None):
         self.starcat_row = star
         super().__init__(f"{star['idx']}", parent)
-        self._offset = 150
-        self.setFont(QtG.QFont("Arial", 150))
+        self._offset = 30
+        self.setFont(QtG.QFont("Arial", 30))
         self.setDefaultTextColor(QtG.QColor("red"))
-        self.setPos(-star["yang"], -star["zang"])
+        # self.setPos(-star["yang"], -star["zang"])
+        self.setPos(star["row"], -star["col"])
 
     def setPos(self, x, y):
         rect = self.boundingRect()
@@ -206,33 +208,35 @@ class StarcatLabel(QtW.QGraphicsTextItem):
 class GuideStar(QtW.QGraphicsEllipseItem):
     def __init__(self, star, parent=None):
         self.starcat_row = star
-        s = 90
-        w = 15
+        s = 27
+        w = 5
         rect = QtC.QRectF(-s, -s, s * 2, s * 2)
         super().__init__(rect, parent)
         self.setPen(QtG.QPen(QtG.QColor("green"), w))
-        self.setPos(-star["yang"], -star["zang"])
+        # self.setPos(-star["yang"], -star["zang"])
+        self.setPos(star["row"], -star["col"])
 
 
 class AcqStar(QtW.QGraphicsRectItem):
     def __init__(self, star, parent=None):
         self.starcat_row = star
-        hw = star["angle_halfw"]
-        w = 15
+        hw = star["halfw"] / 5
+        w = 5
         super().__init__(-hw, -hw, hw * 2, hw * 2, parent)
         self.setPen(QtG.QPen(QtG.QColor("blue"), w))
-        self.setPos(-star["yang"], -star["zang"])
+        # self.setPos(-star["yang"], -star["zang"])
+        self.setPos(star["row"], -star["col"])
 
 
 class MonBox(QtW.QGraphicsRectItem):
     def __init__(self, star, parent=None):
         self.starcat_row = star
         # starcheck convention was to plot monitor boxes at 2X halfw
-        hw = star["angle_halfw"]
-        w = 15
+        hw = star["halfw"] / 5
+        w = 5
         super().__init__(-(hw * 2), -(hw * 2), hw * 4, hw * 4, parent)
         self.setPen(QtG.QPen(QtG.QColor(255, 165, 0), w))
-        self.setPos(-star["yang"], -star["zang"])
+        self.setPos(star["row"], -star["col"])
 
 
 class StarView(QtW.QGraphicsView):
@@ -309,14 +313,14 @@ class StarView(QtW.QGraphicsView):
         painter.setRenderHint(QtG.QPainter.Antialiasing, True)
 
         black_pen = QtG.QPen()
-        black_pen.setWidth(10)
+        black_pen.setWidth(2)
         center = QtC.QPoint(self.viewport().width() // 2, self.viewport().height() // 2)
         center = self.mapToScene(center)
 
         # The following draws the edges of the CCD
         frame = _get_camera_fov_frame()
 
-        row, col = "yag", "zag"
+        row, col = "row", "col"
         painter.setPen(black_pen)
         for i in range(len(frame["edge_1"][row]) - 1):
             painter.drawLine(
@@ -330,7 +334,7 @@ class StarView(QtW.QGraphicsView):
             )
 
         magenta_pen = QtG.QPen(QtG.QColor("magenta"))
-        magenta_pen.setWidth(10)
+        magenta_pen.setWidth(2)
         painter.setPen(magenta_pen)
         for i in range(len(frame["cross_2"][row]) - 1):
             painter.drawLine(
@@ -384,9 +388,9 @@ class StarView(QtW.QGraphicsView):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         if event.oldSize().width() == -1 and event.oldSize().height() == -1:
-            # this fits the viewport to a circle of radius 7200 plus some margine
-            # (this assumes the scene is in arcsec, where the diagonal of the CCD is ~7200 arcsec)
-            scale = min(event.size().height(), event.size().width()) / 10000
+            # this fits the viewport to a circle of radius 7200 arcsec plus some margin
+            # (this assumes the scene is in pixels, where the diagonal of the CCD is ~1400 pixels)
+            scale = min(event.size().height(), event.size().width()) / 2000
             self.scale(scale, scale)
 
 class StarField(QtW.QGraphicsScene):
@@ -396,32 +400,48 @@ class StarField(QtW.QGraphicsScene):
         super().__init__(parent)
 
         self.attitude = None
-        self.stars = []
+        self._stars = None
         self._catalog = None
 
     def add_stars(self, stars):
-        self.stars = stars
-        self.stars["row"], self.stars["col"] = yagzag_to_pixels(
-            self.stars["yang"], self.stars["zang"], allow_bad=True
-        )
-        black_pen = QtG.QPen()
-        black_pen.setWidth(2)
-        self.stars = [Star(star, highlight=False) for star in self.stars]
-        for item in self.stars:
-            # note that the coordinate system is (row, -col), which is (-yag, -zag)
-            yag, zag = radec_to_yagzag(
-                item.star["RA_PMCORR"], item.star["DEC_PMCORR"], self.attitude
+
+        # this draws two circles, a blue one at (0, 0) and a red one at the CCD origin,
+        # which corresponds to the ACA pointing. This is useful for debugging.
+        # w = 6
+        # self.addEllipse(-w/2, -w/2, w, w, QtG.QPen(QtG.QColor("blue")))
+        # self.addEllipse(
+        #     CCD_ORIGIN[0] - w/2, -CCD_ORIGIN[1] - w/2, w, w, QtG.QPen(QtG.QColor("red"))
+        # )
+        self._stars = stars
+        if "yang" not in stars.colnames or "zang" not in stars.colnames:
+            stars["yang"], stars["zang"] = radec_to_yagzag(
+                stars["RA_PMCORR"], stars["DEC_PMCORR"], self.attitude
             )
-            item.setPos(-yag, -zag)
+        self._stars["row"], self._stars["col"] = yagzag_to_pixels(
+            self._stars["yang"], self._stars["zang"], allow_bad=True
+        )
+        self._stars["graphic_item"] = [Star(star, highlight=False) for star in self._stars]
+        for item in self._stars["graphic_item"]:
             self.addItem(item)
+        self.set_attitude(self.attitude)
 
     def shift_scene(self, dx, dy):
         """
-        Apply an active transformation on the scene, shifting the items.
+        Apply an active transformation on the scene, shifting the items the given number of pixels.
+
+        The shift is a linear transformation in pixel coordinates, made on the origin of the CCD
+        assuming a constant roll.
+
+        After the shift, an item initially at (0, 0) should be close to (dx, dy). An item initially
+        at (x, y) will not be as close to (x + dx, y + dy).
         """
         if self.attitude is None:
             return
-        dq = Quat(equatorial=[dx / 3600, dy / 3600, 0])
+        # transformation assuming 5 arcsec per pixel
+        dq = Quat(equatorial=[5 * dx / 3600, 5 * dy / 3600, 0])
+        # this does roughly the same:
+        # yag, zag = pixels_to_yagzag(-dx, dy)
+        # dq = Quat(equatorial=[(yag - YZ_ORIGIN[0]) / 3600, (zag - YZ_ORIGIN[1]) / 3600, 0])
         self.set_attitude(self.attitude * dq)
 
     def rotate_scene(self, angle, around=None):
@@ -434,20 +454,28 @@ class StarField(QtW.QGraphicsScene):
         dq = Quat(equatorial=[0, 0, -angle])
         self.set_attitude(self.attitude * dq)
 
-    def set_attitude(self, q):
+    def set_attitude(self, attitude):
         """
         Set the attitude of the scene, rotating the items to the given attitude.
         """
-        self.attitude = q
-        for item in self.stars:
-            yag, zag = radec_to_yagzag(
-                item.star["RA_PMCORR"], item.star["DEC_PMCORR"], self.attitude
+        if self._stars is not None:
+            # The calculation of row/col is done here so it can be vectorized
+            # if done for each item, it is much slower.
+            self._stars["yang"], self._stars["zag"] = radec_to_yagzag(
+                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], attitude
             )
-            item.setPos(-yag, -zag)
+            self._stars["row"], self._stars["col"] = yagzag_to_pixels(
+                self._stars["yang"], self._stars["zag"], allow_bad=True
+            )
+            for item in self._stars:
+                # note that the coordinate system is (row, -col), which is (-yag, -zag)
+                item["graphic_item"].setPos(item["row"], -item["col"])
 
         if self._catalog is not None:
-            self._catalog.set_pos_for_attitude(self.attitude)
-        self.attitude_changed.emit()
+            self._catalog.set_pos_for_attitude(attitude)
+        if attitude != self.attitude:
+            self.attitude = attitude
+            self.attitude_changed.emit()
 
     def add_catalog(self, starcat):
         if self._catalog is not None:
