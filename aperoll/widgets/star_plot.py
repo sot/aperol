@@ -51,8 +51,8 @@ class Star(QtW.QGraphicsEllipseItem):
             "guide": None,
         }
         # stars are stacked in z by magnitude, so small stars never hide behind big ones
-        # the brightest entry in the catalog is has MAG_ACA = -1.801
-        # the faintest entry in the catalog is has MAG_ACA ~ 21.5
+        # the brightest entry in the catalog has MAG_ACA = -1.801
+        # the faintest entry in the catalog has MAG_ACA ~ 21.5
         self.setZValue(20 + star["MAG_ACA"])
 
     def __repr__(self):
