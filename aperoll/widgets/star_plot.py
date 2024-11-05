@@ -1,6 +1,8 @@
 import agasc
 import numpy as np
-from astropy.table import Table
+import tables
+from astropy import units as u
+from astropy.table import Table, vstack
 from chandra_aca.transform import (
     pixels_to_yagzag,
     radec_to_yagzag,
@@ -27,13 +29,6 @@ def symsize(mag):
     # interp should leave it at the bounding value outside
     # the range
     return np.interp(mag, [6.0, 11.0], [32.0, 8.0])
-
-
-def get_stars(starcat_time, quaternion, radius=2):
-    stars = agasc.get_agasc_cone(
-        quaternion.ra, quaternion.dec, radius=radius, date=starcat_time
-    )
-    return stars
 
 
 class Star(QtW.QGraphicsEllipseItem):
@@ -244,6 +239,7 @@ class StarView(QtW.QGraphicsView):
 
     def __init__(self, scene=None):
         super().__init__(scene)
+        self.setViewport(QtW.QOpenGLWidget())
         # mouseTracking is set so we can show tooltips
         self.setMouseTracking(True)
         # Antialiasing could be disabled if it affects performance
@@ -252,6 +248,18 @@ class StarView(QtW.QGraphicsView):
         self._start = None
         self._rotating = False
         self._moving = False
+
+        self._draw_frame = True
+
+    def _get_draw_frame(self):
+        return self._draw_frame
+
+    def _set_draw_frame(self, draw):
+        if draw != self._draw_frame:
+            self._draw_frame = draw
+            self.viewport().update()
+
+    draw_frame = property(_get_draw_frame, _set_draw_frame)
 
     def mouseMoveEvent(self, event):
         pos = event.pos()
@@ -304,16 +312,27 @@ class StarView(QtW.QGraphicsView):
 
     def wheelEvent(self, event):
         scale = 1 + 0.5 * event.angleDelta().y() / 360
+        if scale < 0:
+            # this has happened when you scroll fast, but I do not know why.
+            # It makes no sense anyway.
+            return
         self.scale(scale, scale)
+        self.set_visibility()
+        self.set_item_scale()
+        self.viewport().update()
 
     def drawForeground(self, painter, _rect):
+        if not self._draw_frame:
+            return
+
         # I want to use antialising for these lines regardless of what is set for the scene,
         # because they are large and otherwise look hideous. It will be reset at the end.
         anti_aliasing_set = painter.testRenderHint(QtG.QPainter.Antialiasing)
         painter.setRenderHint(QtG.QPainter.Antialiasing, True)
 
         black_pen = QtG.QPen()
-        black_pen.setWidth(2)
+        black_pen.setCosmetic(True)
+        black_pen.setWidth(1)
         center = QtC.QPoint(self.viewport().width() // 2, self.viewport().height() // 2)
         center = self.mapToScene(center)
 
@@ -334,7 +353,8 @@ class StarView(QtW.QGraphicsView):
             )
 
         magenta_pen = QtG.QPen(QtG.QColor("magenta"))
-        magenta_pen.setWidth(2)
+        magenta_pen.setCosmetic(True)
+        magenta_pen.setWidth(1)
         painter.setPen(magenta_pen)
         for i in range(len(frame["cross_2"][row]) - 1):
             painter.drawLine(
@@ -393,6 +413,66 @@ class StarView(QtW.QGraphicsView):
             scale = min(event.size().height(), event.size().width()) / 2000
             self.scale(scale, scale)
 
+    def set_visibility(self):
+        r_threshold = [2, 4, 6, 8, 10, 11, 15]
+        mags = [14, 11, 10.3, 9, 9.5, 8, 7, 3]
+
+        if self.scene()._stars is not None:
+            tl = self.mapToScene(self.viewport().rect().topLeft())
+            br = self.mapToScene(self.viewport().rect().bottomRight())
+
+            side = max(np.abs(tl.x() - br.x()), np.abs(tl.y() - br.y()))
+            radius = 1.5 * (side / 2) * 5 / 3600  # 5 arcsec per pixel, radius in degree
+
+            self.draw_frame = radius < 6
+
+            r = agasc.sphere_dist(
+                self.scene().attitude.ra,
+                self.scene().attitude.dec,
+                self.scene()._stars["RA_PMCORR"],
+                self.scene()._stars["DEC_PMCORR"],
+            )
+            max_mag = mags[np.digitize(radius, r_threshold)]
+            hide = (r > radius) | (self.scene()._stars["MAG_ACA"] > max_mag)
+            for idx, item in enumerate(self.scene()._stars):
+                # note that the coordinate system is (row, -col), which is (-yag, -zag)
+                if hide[idx]:
+                    item["graphic_item"].hide()
+                else:
+                    item["graphic_item"].show()
+
+    def set_item_scale(self):
+        if self.scene()._stars is not None:
+            # when zooming out (scaling < 1), the graphic items should not get too small
+            # to control this, we choose a scale below which the item sizes should not decrease
+            # so the items are scaled by the inverse to compensate.
+            # this breaks the view/scene separation, but it works for us.
+            threshold = 0.15
+            new_scale = np.sqrt(self.transform().determinant())
+            for item in self.scene()._stars["graphic_item"]:
+                item.setScale(threshold / new_scale if new_scale < threshold else 1)
+
+    def scale(self, sx, sy):
+        # refusing to scale beyond 15 degrees
+        tl = self.mapToScene(self.viewport().rect().topLeft())
+        br = self.mapToScene(self.viewport().rect().bottomRight())
+        width = np.abs(tl.x() - br.x())
+        height = np.abs(tl.y() - br.y())
+        if (width * 5 / 3600 / sx >= 15) or (height * 5 / 3600 / sy >= 15):
+            return
+
+        # scale
+        super().scale(sx, sy)
+
+        # now tell the scene the new radius for updating stars
+        tl = self.mapToScene(self.viewport().rect().topLeft())
+        br = self.mapToScene(self.viewport().rect().bottomRight())
+
+        side = max(np.abs(tl.x() - br.x()), np.abs(tl.y() - br.y())) / 2
+        radius = 1.5 * side * 5 / 3600  # 5 arcsec per pixel, radius in degree
+        self.scene().update_stars(radius=radius)
+
+
 class StarField(QtW.QGraphicsScene):
     attitude_changed = QtC.pyqtSignal()
 
@@ -400,30 +480,93 @@ class StarField(QtW.QGraphicsScene):
         super().__init__(parent)
 
         self.attitude = None
+        self.time = None
         self._stars = None
         self._catalog = None
 
-    def add_stars(self, stars):
+        self._healpix_indices = set()
+        self._update_radius = 2
 
+    def update_stars(self, radius=None):
+        if radius is not None:
+            self._update_radius = radius
+
+        if self.attitude is None or self.time is None:
+            return
+
+        agasc_file = agasc.paths.default_agasc_file()
+
+        # Table of healpix, idx0, idx1 where idx is the index into main AGASC data table
+        healpix_index_map, nside = agasc.healpix.get_healpix_info(agasc_file)
+        hp = agasc.healpix.get_healpix(nside)
+
+        # We include stars in healpix pixels intersecting a cone with the given radius
+        healpix_indices = set(
+            hp.cone_search_lonlat(
+                self.attitude.ra * u.deg,
+                self.attitude.dec * u.deg,
+                radius=self._update_radius * u.deg,
+            )
+        )
+        add_indices = list(set(healpix_indices) - self._healpix_indices)
+
+        # and we only remove them when they fall out of a larger cone
+        # (to allow for panning without adding and dro[[ing repeatedly)
+        healpix_indices = set(
+            hp.cone_search_lonlat(
+                self.attitude.ra * u.deg,
+                self.attitude.dec * u.deg,
+                radius=(self._update_radius * 1.5) * u.deg,
+            )
+        )
+        remove_indices = list(self._healpix_indices - set(healpix_indices))
+
+        # remove stars
+        if self._stars is not None:
+            for star in self._stars[
+                np.in1d(self._stars["healpix_idx"], remove_indices)
+            ]:
+                self.removeItem(star["graphic_item"])
+            self._stars = self._stars[
+                ~np.in1d(self._stars["healpix_idx"], remove_indices)
+            ]
+
+        # add stars
+        if add_indices:
+            stars_list = []
+            with tables.open_file(agasc_file) as h5:
+                for healpix_index in add_indices:
+                    idx0, idx1 = healpix_index_map[healpix_index]
+                    stars = Table(agasc.read_h5_table(h5, row0=idx0, row1=idx1))
+                    stars["healpix_idx"] = healpix_index
+                    stars_list.append(stars)
+
+            stars = Table(np.concatenate(stars_list))
+            agasc.add_pmcorr_columns(stars, self.time)
+
+            stars["graphic_item"] = [Star(star, highlight=False) for star in stars]
+            for item in stars["graphic_item"]:
+                # item.setScale(self._scale)
+                self.addItem(item)
+
+            if self._stars is None:
+                self._stars = stars
+            else:
+                self._stars = vstack([self._stars, stars])
+
+        # reset current indices
+        self._healpix_indices = set(np.unique(self._stars["healpix_idx"]))
+
+        self.set_star_positions()
+
+    def add_test_stars(self):
         # this draws two circles, a blue one at (0, 0) and a red one at the CCD origin,
         # which corresponds to the ACA pointing. This is useful for debugging.
-        # w = 6
-        # self.addEllipse(-w/2, -w/2, w, w, QtG.QPen(QtG.QColor("blue")))
-        # self.addEllipse(
-        #     CCD_ORIGIN[0] - w/2, -CCD_ORIGIN[1] - w/2, w, w, QtG.QPen(QtG.QColor("red"))
-        # )
-        self._stars = stars
-        if "yang" not in stars.colnames or "zang" not in stars.colnames:
-            stars["yang"], stars["zang"] = radec_to_yagzag(
-                stars["RA_PMCORR"], stars["DEC_PMCORR"], self.attitude
-            )
-        self._stars["row"], self._stars["col"] = yagzag_to_pixels(
-            self._stars["yang"], self._stars["zang"], allow_bad=True
+        w = 6
+        self.addEllipse(-w/2, -w/2, w, w, QtG.QPen(QtG.QColor("blue")))
+        self.addEllipse(
+            CCD_ORIGIN[0] - w/2, -CCD_ORIGIN[1] - w/2, w, w, QtG.QPen(QtG.QColor("red"))
         )
-        self._stars["graphic_item"] = [Star(star, highlight=False) for star in self._stars]
-        for item in self._stars["graphic_item"]:
-            self.addItem(item)
-        self.set_attitude(self.attitude)
 
     def shift_scene(self, dx, dy):
         """
@@ -454,27 +597,30 @@ class StarField(QtW.QGraphicsScene):
         dq = Quat(equatorial=[0, 0, -angle])
         self.set_attitude(self.attitude * dq)
 
-    def set_attitude(self, attitude):
-        """
-        Set the attitude of the scene, rotating the items to the given attitude.
-        """
-        if self._stars is not None:
+    def set_star_positions(self):
+        if self._stars is not None and self.attitude is not None:
             # The calculation of row/col is done here so it can be vectorized
             # if done for each item, it is much slower.
-            self._stars["yang"], self._stars["zag"] = radec_to_yagzag(
-                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], attitude
+            self._stars["yang"], self._stars["zang"] = radec_to_yagzag(
+                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], self.attitude
             )
             self._stars["row"], self._stars["col"] = yagzag_to_pixels(
-                self._stars["yang"], self._stars["zag"], allow_bad=True
+                self._stars["yang"], self._stars["zang"], allow_bad=True
             )
             for item in self._stars:
                 # note that the coordinate system is (row, -col), which is (-yag, -zag)
                 item["graphic_item"].setPos(item["row"], -item["col"])
 
+    def set_attitude(self, attitude):
+        """
+        Set the attitude of the scene, rotating the items to the given attitude.
+        """
+
         if self._catalog is not None:
             self._catalog.set_pos_for_attitude(attitude)
         if attitude != self.attitude:
             self.attitude = attitude
+            self.update_stars()
             self.attitude_changed.emit()
 
     def add_catalog(self, starcat):
@@ -483,6 +629,7 @@ class StarField(QtW.QGraphicsScene):
 
         self._catalog = Catalog(starcat)
         self.addItem(self._catalog)
+
 
 class StarPlot(QtW.QWidget):
     attitude_changed = QtC.pyqtSignal(float, float, float)
@@ -509,6 +656,9 @@ class StarPlot(QtW.QWidget):
         self._catalog = None
 
         self.scene.attitude_changed.connect(self._attitude_changed)
+        self.scene.attitude_changed.connect(self.view.set_visibility)
+        self.scene.attitude_changed.connect(self.view.set_item_scale)
+        self.scene.changed.connect(self.view.set_visibility)
 
         self.view.include_star.connect(self.include_star)
 
@@ -531,31 +681,25 @@ class StarPlot(QtW.QWidget):
         """
         self.scene.set_attitude(q)
         if update:
-            self.show_stars()
+            self.scene.update_stars()
 
     def set_time(self, t, update=True):
         self._time = CxoTime(t)
+        self.scene.time = self._time
         if update:
-            self.show_stars()
+            self.scene.update_stars()
 
     def highlight(self, agasc_ids, update=True):
         self._highlight = agasc_ids
         if update:
-            self.show_stars()
+            self.scene.update_stars()
 
     def set_catalog(self, catalog, update=True):
         self.set_time(catalog.date, update=False)
         self._catalog = catalog
         self.show_catalog()
         if update:
-            self.show_stars()
-
-    def show_stars(self):
-        self.scene.clear()
-        if self.scene.attitude is None or self._time is None:
-            return
-        self.stars = get_stars(self._time, self.scene.attitude)
-        self.scene.add_stars(self.stars)
+            self.scene.update_stars()
 
     def show_catalog(self):
         if self._catalog is not None:
