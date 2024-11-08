@@ -23,6 +23,7 @@ __all__ = [
     "MonBox",
 ]
 
+
 def symsize(mag):
     # map mags to figsizes, defining
     # mag 6 as 40 and mag 11 as 3
@@ -147,9 +148,7 @@ class Catalog(QtW.QGraphicsItem):
             yag, zag = radec_to_yagzag(
                 item.starcat_row["ra"], item.starcat_row["dec"], attitude
             )
-            row, col = yagzag_to_pixels(
-                yag, zag, allow_bad=True
-            )
+            row, col = yagzag_to_pixels(yag, zag, allow_bad=True)
             # item.setPos(-yag, -zag)
             item.setPos(row, -col)
 
@@ -232,4 +231,3 @@ class MonBox(QtW.QGraphicsRectItem):
         super().__init__(-(hw * 2), -(hw * 2), hw * 4, hw * 4, parent)
         self.setPen(QtG.QPen(QtG.QColor(255, 165, 0), w))
         self.setPos(star["row"], -star["col"])
-

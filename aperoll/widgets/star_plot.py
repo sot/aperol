@@ -346,9 +346,13 @@ class StarField(QtW.QGraphicsScene):
         # this draws two circles, a blue one at (0, 0) and a red one at the CCD origin,
         # which corresponds to the ACA pointing. This is useful for debugging.
         w = 6
-        self.addEllipse(-w/2, -w/2, w, w, QtG.QPen(QtG.QColor("blue")))
+        self.addEllipse(-w / 2, -w / 2, w, w, QtG.QPen(QtG.QColor("blue")))
         self.addEllipse(
-            utils.CCD_ORIGIN[0] - w/2, -utils.CCD_ORIGIN[1] - w/2, w, w, QtG.QPen(QtG.QColor("red"))
+            utils.CCD_ORIGIN[0] - w / 2,
+            -utils.CCD_ORIGIN[1] - w / 2,
+            w,
+            w,
+            QtG.QPen(QtG.QColor("red")),
         )
 
     def shift_scene(self, dx, dy):
