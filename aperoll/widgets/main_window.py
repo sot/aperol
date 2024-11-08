@@ -189,7 +189,9 @@ class MainWindow(QtW.QMainWindow):
         event.accept()
 
     def _parameters_changed(self):
-        self._data.reset(self.parameters.proseco_args())
+        proseco_args = self.parameters.proseco_args()
+        self.plot.set_base_attitude(proseco_args["att"])
+        self._data.reset(proseco_args)
 
     def _init(self):
         if self.parameters.values:
