@@ -479,8 +479,8 @@ class StarField(QtW.QGraphicsScene):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.attitude = None
-        self.time = None
+        self._attitude = None
+        self._time = None
         self._stars = None
         self._catalog = None
 
@@ -491,7 +491,7 @@ class StarField(QtW.QGraphicsScene):
         if radius is not None:
             self._update_radius = radius
 
-        if self.attitude is None or self.time is None:
+        if self._attitude is None or self._time is None:
             return
 
         agasc_file = agasc.paths.default_agasc_file()
@@ -503,8 +503,8 @@ class StarField(QtW.QGraphicsScene):
         # We include stars in healpix pixels intersecting a cone with the given radius
         healpix_indices = set(
             hp.cone_search_lonlat(
-                self.attitude.ra * u.deg,
-                self.attitude.dec * u.deg,
+                self._attitude.ra * u.deg,
+                self._attitude.dec * u.deg,
                 radius=self._update_radius * u.deg,
             )
         )
@@ -542,7 +542,7 @@ class StarField(QtW.QGraphicsScene):
                     stars_list.append(stars)
 
             stars = Table(np.concatenate(stars_list))
-            agasc.add_pmcorr_columns(stars, self.time)
+            agasc.add_pmcorr_columns(stars, self._time)
 
             stars["graphic_item"] = [Star(star, highlight=False) for star in stars]
             for item in stars["graphic_item"]:
@@ -578,31 +578,31 @@ class StarField(QtW.QGraphicsScene):
         After the shift, an item initially at (0, 0) should be close to (dx, dy). An item initially
         at (x, y) will not be as close to (x + dx, y + dy).
         """
-        if self.attitude is None:
+        if self._attitude is None:
             return
         # transformation assuming 5 arcsec per pixel
         dq = Quat(equatorial=[5 * dx / 3600, 5 * dy / 3600, 0])
         # this does roughly the same:
         # yag, zag = pixels_to_yagzag(-dx, dy)
         # dq = Quat(equatorial=[(yag - YZ_ORIGIN[0]) / 3600, (zag - YZ_ORIGIN[1]) / 3600, 0])
-        self.set_attitude(self.attitude * dq)
+        self.set_attitude(self._attitude * dq)
 
     def rotate_scene(self, angle, around=None):
         """
         Apply an active transformation on the scene, rotating the items around the given point.
         """
-        if self.attitude is None:
+        if self._attitude is None:
             return
 
         dq = Quat(equatorial=[0, 0, -angle])
-        self.set_attitude(self.attitude * dq)
+        self.set_attitude(self._attitude * dq)
 
     def set_star_positions(self):
-        if self._stars is not None and self.attitude is not None:
+        if self._stars is not None and self._attitude is not None:
             # The calculation of row/col is done here so it can be vectorized
             # if done for each item, it is much slower.
             self._stars["yang"], self._stars["zang"] = radec_to_yagzag(
-                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], self.attitude
+                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], self._attitude
             )
             self._stars["row"], self._stars["col"] = yagzag_to_pixels(
                 self._stars["yang"], self._stars["zang"], allow_bad=True
@@ -611,17 +611,32 @@ class StarField(QtW.QGraphicsScene):
                 # note that the coordinate system is (row, -col), which is (-yag, -zag)
                 item["graphic_item"].setPos(item["row"], -item["col"])
 
+    def set_time(self, time):
+        if time != self._time:
+            self._time = time
+            self.update_stars()
+
+    def get_time(self):
+        return self._time
+
+    time = property(get_time, set_time)
+
     def set_attitude(self, attitude):
         """
         Set the attitude of the scene, rotating the items to the given attitude.
         """
 
-        if self._catalog is not None:
-            self._catalog.set_pos_for_attitude(attitude)
-        if attitude != self.attitude:
-            self.attitude = attitude
+        if attitude != self._attitude:
+            if self._catalog is not None:
+                self._catalog.set_pos_for_attitude(attitude)
+            self._attitude = attitude
             self.update_stars()
             self.attitude_changed.emit()
+
+    def get_attitude(self):
+        return self._attitude
+
+    attitude = property(get_attitude, set_attitude)
 
     def add_catalog(self, starcat):
         if self._catalog is not None:
@@ -670,36 +685,25 @@ class StarPlot(QtW.QWidget):
                 self.scene.attitude.roll,
             )
 
-    def set_base_attitude(self, q, update=True):
+    def set_base_attitude(self, q):
         """
         Sets the base attitude
 
         The base attitude is the attitude corresponding to the origin of the scene.
-        When the base attitude changes, the star positions must be updated. Not doing so will
-        leave the display in an inconsistent state. The "update" argument is there as a convenience
-        to delay the update in case one wants to call several setters.
         """
         self.scene.set_attitude(q)
-        if update:
-            self.scene.update_stars()
 
-    def set_time(self, t, update=True):
+    def set_time(self, t):
         self._time = CxoTime(t)
         self.scene.time = self._time
-        if update:
-            self.scene.update_stars()
 
-    def highlight(self, agasc_ids, update=True):
+    def highlight(self, agasc_ids):
         self._highlight = agasc_ids
-        if update:
-            self.scene.update_stars()
 
-    def set_catalog(self, catalog, update=True):
-        self.set_time(catalog.date, update=False)
+    def set_catalog(self, catalog):
+        self.set_time(catalog.date)
         self._catalog = catalog
         self.show_catalog()
-        if update:
-            self.scene.update_stars()
 
     def show_catalog(self):
         if self._catalog is not None:
@@ -763,8 +767,8 @@ def main():
 
     app = QtW.QApplication([])
     w = StarPlot()
-    w.set_base_attitude(params["attitude"], update=False)
-    w.set_time(params["date"], update=True)
+    w.set_base_attitude(params["attitude"])
+    w.set_time(params["date"])
     w.resize(1500, 1000)
     w.show()
     app.exec()
