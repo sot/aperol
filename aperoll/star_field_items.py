@@ -9,6 +9,7 @@ from chandra_aca.transform import (
     yagzag_to_pixels,
     yagzag_to_radec,
 )
+from proseco.acq import get_acq_candidates_mask
 from PyQt5 import QtCore as QtC
 from PyQt5 import QtGui as QtG
 from PyQt5 import QtWidgets as QtW
@@ -37,6 +38,7 @@ class Star(QtW.QGraphicsEllipseItem):
         s = symsize(star["MAG_ACA"])
         rect = QtC.QRectF(-s / 2, -s / 2, s, s)
         super().__init__(rect, parent)
+        # self._stars = Table([star], names=star.colnames, dtype=star.dtype)
         self.star = star
         self.highlight = highlight
         color = self.color()
@@ -64,22 +66,7 @@ class Star(QtW.QGraphicsEllipseItem):
         return QtG.QColor("black")
 
     def bad(self):
-        ok = (
-            (self.star["CLASS"] == 0)
-            & (self.star["MAG_ACA"] > 5.3)
-            & (self.star["MAG_ACA"] < 11.0)
-            & (~np.isclose(self.star["COLOR1"], 0.7))
-            & (self.star["MAG_ACA_ERR"] < 100.0)  # mag_err is in 0.01 mag
-            & (self.star["ASPQ1"] < 40)
-            & (  # Less than 2 arcsec centroid offset due to nearby spoiler
-                self.star["ASPQ2"] == 0
-            )
-            & (self.star["POS_ERR"] < 3000)  # Position error < 3.0 arcsec
-            & (
-                (self.star["VAR"] == -9999) | (self.star["VAR"] == 5)
-            )  # Not known to vary > 0.2 mag
-        )
-        return not ok
+        return not get_acq_candidates_mask(self.star)
 
     def text(self):
         return (
