@@ -66,7 +66,7 @@ _COMMON_STATES = [
     },
     {
         # use case: "alternate" real-time telemetry
-        # (attitude se to user attitude, but showing the camera outline in the alternate FOV)
+        # (attitude set to user attitude, but showing the camera outline in the alternate FOV)
         "name": "Alternate",
         "onboard_attitude_slot": "alternate_attitude",
         "enable_fov": True,
