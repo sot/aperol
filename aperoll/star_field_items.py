@@ -451,6 +451,10 @@ class CameraOutline(QtW.QGraphicsItem):
                 ),
             )
 
+        magenta_pen = QtG.QPen(QtG.QColor("magenta"))
+        magenta_pen.setCosmetic(True)
+        magenta_pen.setWidth(1)
+        painter.setPen(magenta_pen)
         for i in range(len(self._frame["cross_2"]["row"]) - 1):
             painter.drawLine(
                 QtC.QPointF(
