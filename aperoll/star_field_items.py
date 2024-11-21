@@ -304,7 +304,9 @@ class FieldOfView(QtW.QGraphicsItem):
             return
         self._attitude = attitude
         if self.camera_outline is None:
-            self.camera_outline = CameraOutline(attitude, parent=self, simple=self.alternate_outline)
+            self.camera_outline = CameraOutline(
+                attitude, parent=self, simple=self.alternate_outline
+            )
         else:
             self.camera_outline.attitude = attitude
         if self.scene() is not None and self.scene().attitude is not None:
