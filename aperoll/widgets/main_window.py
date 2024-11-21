@@ -179,7 +179,7 @@ class MainWindow(QtW.QMainWindow):
                 sparkles.core.check_catalog(aca)
 
         if starcat is not None:
-            self.plot.set_catalog(starcat, update=False)
+            self.plot.set_catalog(starcat)
             self.starcat_view.set_catalog(aca)
 
     def closeEvent(self, event):
@@ -189,7 +189,9 @@ class MainWindow(QtW.QMainWindow):
         event.accept()
 
     def _parameters_changed(self):
-        self._data.reset(self.parameters.proseco_args())
+        proseco_args = self.parameters.proseco_args()
+        self.plot.set_base_attitude(proseco_args["att"])
+        self._data.reset(proseco_args)
 
     def _init(self):
         if self.parameters.values:
@@ -199,8 +201,8 @@ class MainWindow(QtW.QMainWindow):
             aca_attitude = Quat(
                 equatorial=(float(ra / u.deg), float(dec / u.deg), roll)
             )
-            self.plot.set_base_attitude(aca_attitude, update=False)
-            self.plot.set_time(time, update=True)
+            self.plot.set_base_attitude(aca_attitude)
+            self.plot.set_time(time)
 
     def _reset(self):
         self.parameters.set_parameters(**self.opts)
@@ -226,7 +228,7 @@ class MainWindow(QtW.QMainWindow):
         """
         if self._data.proseco:
             self.starcat_view.set_catalog(self._data.proseco["aca"])
-            self.plot.set_catalog(self._data.proseco["catalog"], update=False)
+            self.plot.set_catalog(self._data.proseco["catalog"])
 
     def _export_proseco(self):
         """

@@ -506,6 +506,7 @@ class Parameters(QtW.QWidget):
             "detector": self.values["instrument"],
             "sim_offset": 0,  # docs say this is optional, but it does not seem to be
             "focus_offset": 0,  # docs say this is optional, but it does not seem to be
+            "dyn_bgd_n_faint": 2,
         }
 
         for key in [
