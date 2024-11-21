@@ -53,7 +53,7 @@ _COMMON_STATES = [
         "auto_proseco": False,
     },
     {
-        # use case: starndard aperoll use.
+        # use case: standard aperoll use.
         # (on-board attitude never updated, catalog on, centroids off, auto-proseco)
         "name": "Proseco",
         "onboard_attitude_slot": None,
