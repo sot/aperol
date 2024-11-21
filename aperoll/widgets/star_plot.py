@@ -20,7 +20,7 @@ from aperoll.star_field_items import Catalog, Centroid, FieldOfView, Star
 
 
 @dataclass
-class State:
+class StarFieldState:
     """
     Dataclass to hold the state of the star field.
 
@@ -428,7 +428,7 @@ class StarField(QtW.QGraphicsScene):
         self.main_fov = FieldOfView()
         self.addItem(self.main_fov)
 
-        self.states = {value["name"]: State(**value) for value in _COMMON_STATES}
+        self.states = {value["name"]: StarFieldState(**value) for value in _COMMON_STATES}
         self.set_state("Telemetry")
         if self.state.auto_proseco:
             self.update_proseco()
