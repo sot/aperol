@@ -85,6 +85,9 @@ def star_field_position(
 
 
 def symsize(mag):
+    """
+    Symbol size for a star of a given magnitude.
+    """
     # map mags to figsizes, defining
     # mag 6 as 40 and mag 11 as 3
     # interp should leave it at the bounding value outside
@@ -93,6 +96,28 @@ def symsize(mag):
 
 
 class Star(QtW.QGraphicsEllipseItem):
+    """
+    QGraphicsItem representing a star.
+
+    Stars are depicted as circles, and the color is automatically set based on the magnitude
+    (faint stars are gray) and whether the star is an acquisition or guide star candidate:
+
+    - If the star is maked as "highlighted" it is drawn bright red.
+    - Faint stars (mag > 10.5 are light gray).
+    - Stars that are not acquisition of guide candidates are tomato red.
+    - All others are black.
+
+    This class also handles the tooltip that shows up when one hovers over the star.
+
+    Parameters
+    ----------
+    star : astropy.table.Row
+        One row from the AGASC table.
+    parent : QGraphicsItem, optional
+        The parent item.
+    highlight : bool, optional
+        If True, the star is highlighted in red.
+    """
     def __init__(self, star, parent=None, highlight=False):
         s = symsize(star["MAG_ACA"])
         rect = QtC.QRectF(-s / 2, -s / 2, s, s)
@@ -148,6 +173,11 @@ class Catalog(QtW.QGraphicsItem):
 
     Note that the position of the catalog is ALLWAYS (0,0) and the item positions need to be set
     separately for a given attitude.
+
+    Parameters
+    ----------
+    catalog : astropy.table.Table, optional
+        A star catalog. The following columns are used: idx, type, yang, zang, halfw.
     """
 
     def __init__(self, catalog=None, parent=None):
@@ -214,10 +244,11 @@ class Catalog(QtW.QGraphicsItem):
             item.setPos(x, y)
 
     def boundingRect(self):
+        # this item draws nothing, it just holds children, but this is a required method.
         return QtC.QRectF(0, 0, 1, 1)
 
     def paint(self, _painter, _option, _widget):
-        # this item draws nothing, it just holds children
+        # this item draws nothing, it just holds children, but this is a required method.
         pass
 
     def __repr__(self):
@@ -225,6 +256,18 @@ class Catalog(QtW.QGraphicsItem):
 
 
 class Centroid(QtW.QGraphicsEllipseItem):
+    """
+    QGraphicsItem representing a centroid.
+
+    Centroids are depicted as blue circles with an X inside.
+
+    Parameters
+    ----------
+    imgnum : int
+        The image number (0-7).
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, imgnum, parent=None):
         self.imgnum = imgnum
         self.excluded = False
@@ -258,6 +301,18 @@ class Centroid(QtW.QGraphicsEllipseItem):
 
 
 class FidLight(QtW.QGraphicsEllipseItem):
+    """
+    QGraphicsItem representing a fiducial light.
+
+    Fiducial lights are depicted as red circles with a cross inside.
+
+    Parameters
+    ----------
+    imgnum : int
+        The image number (0-7).
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, fid, parent=None):
         self.starcat_row = fid
         s = 27
@@ -275,6 +330,18 @@ class FidLight(QtW.QGraphicsEllipseItem):
 
 
 class StarcatLabel(QtW.QGraphicsTextItem):
+    """
+    QGraphicsItem representing a label for a star in the star catalog.
+
+    The label is the star's index in the catalog.
+
+    Parameters
+    ----------
+    star : astropy.table.Row
+        The proseco catalog row.
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, star, parent=None):
         self.starcat_row = star
         super().__init__(f"{star['idx']}", parent)
@@ -290,6 +357,18 @@ class StarcatLabel(QtW.QGraphicsTextItem):
 
 
 class GuideStar(QtW.QGraphicsEllipseItem):
+    """
+    QGraphicsItem representing a guide star.
+
+    Guide stars are depicted as green circles.
+
+    Parameters
+    ----------
+    star : astropy.table.Row
+        The proseco catalog row.
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, star, parent=None):
         self.starcat_row = star
         s = 27
@@ -299,6 +378,18 @@ class GuideStar(QtW.QGraphicsEllipseItem):
         self.setPen(QtG.QPen(QtG.QColor("green"), w))
 
 class AcqStar(QtW.QGraphicsRectItem):
+    """
+    QGraphicsItem representing an acquisition star.
+
+    Acquisition stars are depicted as blue rectangles with width given by "halfw".
+
+    Parameters
+    ----------
+    star : astropy.table.Row
+        The proseco catalog row.
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, star, parent=None):
         self.starcat_row = star
         hw = star["halfw"] / 5
@@ -306,7 +397,20 @@ class AcqStar(QtW.QGraphicsRectItem):
         super().__init__(-hw, -hw, hw * 2, hw * 2, parent)
         self.setPen(QtG.QPen(QtG.QColor("blue"), w))
 
+
 class MonBox(QtW.QGraphicsRectItem):
+    """
+    QGraphicsItem representing an monitoring star.
+
+    Monitoring stars are depicted as orange rectangles with width given by "halfw".
+
+    Parameters
+    ----------
+    star : astropy.table.Row
+        The proseco catalog row.
+    parent : QGraphicsItem, optional
+        The parent item.
+    """
     def __init__(self, star, parent=None):
         self.starcat_row = star
         # starcheck convention was to plot monitor boxes at 2X halfw
@@ -317,6 +421,21 @@ class MonBox(QtW.QGraphicsRectItem):
 
 
 class FieldOfView(QtW.QGraphicsItem):
+    """
+    QGraphicsItem that groups together other items related to a (hypothetical) attitude.
+
+    Items managed by this class:
+
+    - CameraOutline: the outline of the ACA CCD.
+    - Centroids: the centroids of the stars.
+
+    Parameters
+    ----------
+    attitude : Quaternion, optional
+        The attitude of the camera associated with this FieldOfView.
+    alternate_outline : bool, optional
+        Boolean flag to use a simpler outline for the camera.
+    """
     def __init__(self, attitude=None, alternate_outline=False):
         super().__init__()
         self.camera_outline = None
@@ -343,9 +462,15 @@ class FieldOfView(QtW.QGraphicsItem):
         self.setZValue(80)
 
     def get_attitude(self):
+        """
+        Get the attitude of the camera associated with this FieldOfView.
+        """
         return self._attitude
 
     def set_attitude(self, attitude):
+        """
+        Set the attitude of the camera associated with this FieldOfView.
+        """
         if hasattr(self, "_attitude") and attitude == self._attitude:
             return
         self._attitude = attitude
@@ -361,6 +486,17 @@ class FieldOfView(QtW.QGraphicsItem):
     attitude = property(get_attitude, set_attitude)
 
     def set_pos_for_attitude(self, attitude):
+        """
+        Set the position of all items in the field of view for the given attitude.
+
+        This method is called when the attitude of the scene changes. The position of all items is
+        recalculated based on the new attitude.
+
+        Parameters
+        ----------
+        attitude : Quaternion
+            The attitude of the scene.
+        """
         if self.camera_outline is not None:
             self.camera_outline.set_pos_for_attitude(attitude)
         self._set_centroid_pos_for_attitude(attitude)
@@ -383,13 +519,22 @@ class FieldOfView(QtW.QGraphicsItem):
             centroid.setPos(x[i], y[i])
 
     def boundingRect(self):
+        # this item draws nothing, it just holds children, but this is a required method.
         return QtC.QRectF(0, 0, 1, 1)
 
     def paint(self, _painter, _option, _widget):
-        # this item draws nothing, it just holds children
+        # this item draws nothing, it just holds children, but this is a required method.
         pass
 
     def set_centroids(self, centroids):
+        """
+        Set the centroid values (usually from telemetry).
+
+        Parameters
+        ----------
+        centroids : astropy.table.Table
+            A table with the following columns: IMGNUM, AOACMAG, YAGS, ZAGS, IMGFID.
+        """
         missing_cols = set(centroids.dtype.names) - set(self._centroids.dtype.names)
         if missing_cols:
             raise ValueError(f"Missing columns in centroids: {missing_cols}")
@@ -440,6 +585,15 @@ class FieldOfView(QtW.QGraphicsItem):
 
 
 class CameraOutline(QtW.QGraphicsItem):
+    """
+    A QGraphicsItem that represents the outline (the edges) of the ACA CCD.
+
+    This is a graphics item to represent a hypothetical outline of the ACA CCD if the camera were
+    set to a given attitude.
+
+    To calculate the position of the edges in the scene, the edges are first mapped to RA/dec,
+    and these RA/dec are later used to calculate the position in the scene coordinate system.
+    """
     def __init__(self, attitude, parent=None, simple=False):
         super().__init__(parent)
         self.simple = simple
@@ -544,7 +698,7 @@ class CameraOutline(QtW.QGraphicsItem):
 
     def set_attitude(self, attitude):
         """
-        Set the attitude of the camera corresponding to this frame.
+        Set the attitude of the camera corresponding to this outline.
 
         Note that this is not the attitude of the scene coordinate system.
         """
@@ -562,6 +716,9 @@ class CameraOutline(QtW.QGraphicsItem):
                 )
 
     def get_attitude(self):
+        """
+        Get the attitude of the camera corresponding to this outline.
+        """
         return self._attitude
 
     attitude = property(get_attitude, set_attitude)

@@ -718,7 +718,7 @@ class StarPlot(QtW.QWidget):
         """
         Sets the base attitude
 
-        The base attitude is the attitude corresponding to the origin of the scene.
+        The base attitude is the attitude of the scene.
         """
         self.scene.set_attitude(q)
 
