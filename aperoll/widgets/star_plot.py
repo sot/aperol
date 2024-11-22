@@ -428,8 +428,6 @@ class StarField(QtW.QGraphicsScene):
             value["name"]: StarFieldState(**value) for value in _COMMON_STATES
         }
         self.set_state("Telemetry")
-        if self.state.auto_proseco:
-            self.update_proseco()
 
     def get_onboard_attitude_slot(self):
         return self.state.onboard_attitude_slot
