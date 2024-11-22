@@ -32,14 +32,14 @@ __all__ = [
 
 
 def star_field_position(
-        attitude=None,
-        yag=None,
-        zag=None,
-        ra=None,
-        dec=None,
-        row=None,
-        col=None,
-    ):
+    attitude=None,
+    yag=None,
+    zag=None,
+    ra=None,
+    dec=None,
+    row=None,
+    col=None,
+):
     """
     Calculate the position of an item in the star_field.
 
@@ -118,6 +118,7 @@ class Star(QtW.QGraphicsEllipseItem):
     highlight : bool, optional
         If True, the star is highlighted in red.
     """
+
     def __init__(self, star, parent=None, highlight=False):
         s = symsize(star["MAG_ACA"])
         rect = QtC.QRectF(-s / 2, -s / 2, s, s)
@@ -268,6 +269,7 @@ class Centroid(QtW.QGraphicsEllipseItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, imgnum, parent=None):
         self.imgnum = imgnum
         self.excluded = False
@@ -314,6 +316,7 @@ class FidLight(QtW.QGraphicsEllipseItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, fid, parent=None):
         self.starcat_row = fid
         s = 27
@@ -343,6 +346,7 @@ class StarcatLabel(QtW.QGraphicsTextItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, star, parent=None):
         self.starcat_row = star
         super().__init__(f"{star['idx']}", parent)
@@ -370,6 +374,7 @@ class GuideStar(QtW.QGraphicsEllipseItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, star, parent=None):
         self.starcat_row = star
         s = 27
@@ -377,6 +382,7 @@ class GuideStar(QtW.QGraphicsEllipseItem):
         rect = QtC.QRectF(-s, -s, s * 2, s * 2)
         super().__init__(rect, parent)
         self.setPen(QtG.QPen(QtG.QColor("green"), w))
+
 
 class AcqStar(QtW.QGraphicsRectItem):
     """
@@ -391,6 +397,7 @@ class AcqStar(QtW.QGraphicsRectItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, star, parent=None):
         self.starcat_row = star
         hw = star["halfw"] / 5
@@ -412,6 +419,7 @@ class MonBox(QtW.QGraphicsRectItem):
     parent : QGraphicsItem, optional
         The parent item.
     """
+
     def __init__(self, star, parent=None):
         self.starcat_row = star
         # starcheck convention was to plot monitor boxes at 2X halfw
@@ -437,6 +445,7 @@ class FieldOfView(QtW.QGraphicsItem):
     alternate_outline : bool, optional
         Boolean flag to use a simpler outline for the camera.
     """
+
     def __init__(self, attitude=None, alternate_outline=False):
         super().__init__()
         self.camera_outline = None
@@ -536,7 +545,9 @@ class FieldOfView(QtW.QGraphicsItem):
         centroids : astropy.table.Table
             A table with the following columns: IMGNUM, AOACMAG, YAGS, ZAGS, IMGFID.
         """
-        missing_cols = {"IMGNUM", "AOACMAG", "YAGS", "ZAGS", "IMGFID"} - set(centroids.dtype.names)
+        missing_cols = {"IMGNUM", "AOACMAG", "YAGS", "ZAGS", "IMGFID"} - set(
+            centroids.dtype.names
+        )
         if missing_cols:
             raise ValueError(f"Missing columns in centroids: {missing_cols}")
 
@@ -582,9 +593,7 @@ class FieldOfView(QtW.QGraphicsItem):
         table["ZAG"] = self._centroids["ZAGS"]
         table["IMGFID"] = self._centroids["IMGFID"]
         table["excluded"] = self._centroids["excluded"]
-        table["visible"] = [
-            centroid.isVisible() for centroid in self.centroids
-        ]
+        table["visible"] = [centroid.isVisible() for centroid in self.centroids]
 
         return table
 
@@ -599,6 +608,7 @@ class CameraOutline(QtW.QGraphicsItem):
     To calculate the position of the edges in the scene, the edges are first mapped to RA/dec,
     and these RA/dec are later used to calculate the position in the scene coordinate system.
     """
+
     def __init__(self, attitude, parent=None, simple=False):
         super().__init__(parent)
         self.simple = simple

@@ -12,7 +12,13 @@ from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
 
 from aperoll import utils
-from aperoll.star_field_items import Catalog, Centroid, FieldOfView, Star, star_field_position
+from aperoll.star_field_items import (
+    Catalog,
+    Centroid,
+    FieldOfView,
+    Star,
+    star_field_position,
+)
 
 
 @dataclass
@@ -576,7 +582,7 @@ class StarField(QtW.QGraphicsScene):
             x, y = star_field_position(
                 self._attitude,
                 ra=self._stars["RA_PMCORR"],
-                dec=self._stars["DEC_PMCORR"]
+                dec=self._stars["DEC_PMCORR"],
             )
             for idx, item in enumerate(self._stars):
                 item["graphic_item"].setPos(x[idx], y[idx])
