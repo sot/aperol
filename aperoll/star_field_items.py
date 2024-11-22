@@ -17,6 +17,7 @@ from PyQt5 import QtWidgets as QtW
 from aperoll import utils
 
 __all__ = [
+    "star_field_position",
     "Star",
     "Catalog",
     "FidLight",
@@ -28,6 +29,59 @@ __all__ = [
     "CameraOutline",
     "FieldOfView",
 ]
+
+
+def star_field_position(
+        attitude=None,
+        yag=None,
+        zag=None,
+        ra=None,
+        dec=None,
+        row=None,
+        col=None,
+    ):
+    """
+    Calculate the position of an item in the star_field.
+
+    This function completely determines the position of an item in the star field, given the
+    attitude. Some items' positions are determined by yag/zag (like centroids), others' are
+    determined by RA/Dec (like stars), and others are given in pixels (like bad pixels).
+
+    Catalog elements (guide/acq/fids) use RA/Dec to make sure they always point to the star in the
+    catalog even when the attitude changes.
+
+    Parameters
+    ----------
+    attitude : Quaternion, optional
+        The attitude of the scene. This is required if the position is given by RA/dec.
+    yag : float, optional
+        The Y angle in degrees.
+    zag : float, optional
+        The Z angle in degrees.
+    ra : float, optional
+        The RA in degrees.
+    dec : float, optional
+        The Dec in degrees.
+    row : float, optional
+        The row in pixels.
+    col : float, optional
+        The column in pixels.
+
+    Returns
+    -------
+    x, y : float
+        The position of the item in the scene.
+    """
+    if ra is not None and dec is not None:
+        if attitude is None:
+            raise ValueError("Attitude must be given if RA/Dec is given.")
+        yag, zag = radec_to_yagzag(ra, dec, attitude)
+    if yag is not None and zag is not None:
+        row, col = yagzag_to_pixels(yag, zag, allow_bad=True)
+    if row is None or col is None:
+        raise ValueError("Either YAG/ZAG, RA/Dec or row/col must be given.")
+    # note that the coordinate system is (row, -col), which is (-yag, -zag)
+    return row, -col
 
 
 def symsize(mag):
@@ -113,11 +167,12 @@ class Catalog(QtW.QGraphicsItem):
         self.starcat = catalog.copy()  # will add some columns
 
         cat = Table(self.starcat)
-        # item positions are set from row/col
-        cat["row"], cat["col"] = yagzag_to_pixels(
-            cat["yang"], cat["zang"], allow_bad=True
-        )
-        # when attitude changes, the positions (row, col) are recalculated from (ra, dec)
+
+        # If the attitude changes (e.g. if we rotate the star field, changing the roll angle)
+        # the yang/zang values will not be the same as the ones originally in the catalog,
+        # because the corresponding star moved in the CCD. To keep track of that, we project back
+        # to get the corresponding RA/dec values assuming the attitude in the catalog.
+        # Later, when attitude changes, the positions are recalculated from (ra, dec)
         # so these items move with the corresponding star.
         cat["ra"], cat["dec"] = yagzag_to_radec(
             cat["yang"], cat["zang"], self.starcat.att
@@ -132,6 +187,8 @@ class Catalog(QtW.QGraphicsItem):
         self.acq_stars = [AcqStar(acq_star, self) for acq_star in acq_stars]
         self.mon_stars = [MonBox(mon_box, self) for mon_box in mon_wins]
         self.fid_lights = [FidLight(fid, self) for fid in fids]
+
+        self.set_pos_for_attitude(self.scene().attitude)
 
     def setPos(self, *_args, **_kwargs):
         # the position of the catalog is ALLWAYS (0,0)
@@ -149,12 +206,12 @@ class Catalog(QtW.QGraphicsItem):
         # item positions are relative to the parent's position (self)
         # but the parent's position is (or should be) always (0, 0)
         for item in self.childItems():
-            yag, zag = radec_to_yagzag(
-                item.starcat_row["ra"], item.starcat_row["dec"], attitude
+            x, y = star_field_position(
+                attitude,
+                ra=item.starcat_row["ra"],
+                dec=item.starcat_row["dec"],
             )
-            row, col = yagzag_to_pixels(yag, zag, allow_bad=True)
-            # item.setPos(-yag, -zag)
-            item.setPos(row, -col)
+            item.setPos(x, y)
 
     def boundingRect(self):
         return QtC.QRectF(0, 0, 1, 1)
@@ -210,8 +267,6 @@ class FidLight(QtW.QGraphicsEllipseItem):
         self.fid = fid
         pen = QtG.QPen(QtG.QColor("red"), w)
         self.setPen(pen)
-        # self.setPos(-fid["yang"], -fid["zang"])
-        self.setPos(fid["row"], -fid["col"])
 
         line = QtW.QGraphicsLineItem(-s, 0, s, 0, self)
         line.setPen(pen)
@@ -226,8 +281,6 @@ class StarcatLabel(QtW.QGraphicsTextItem):
         self._offset = 30
         self.setFont(QtG.QFont("Arial", 30))
         self.setDefaultTextColor(QtG.QColor("red"))
-        # self.setPos(-star["yang"], -star["zang"])
-        self.setPos(star["row"], -star["col"])
 
     def setPos(self, x, y):
         rect = self.boundingRect()
@@ -244,9 +297,6 @@ class GuideStar(QtW.QGraphicsEllipseItem):
         rect = QtC.QRectF(-s, -s, s * 2, s * 2)
         super().__init__(rect, parent)
         self.setPen(QtG.QPen(QtG.QColor("green"), w))
-        # self.setPos(-star["yang"], -star["zang"])
-        self.setPos(star["row"], -star["col"])
-
 
 class AcqStar(QtW.QGraphicsRectItem):
     def __init__(self, star, parent=None):
@@ -255,9 +305,6 @@ class AcqStar(QtW.QGraphicsRectItem):
         w = 5
         super().__init__(-hw, -hw, hw * 2, hw * 2, parent)
         self.setPen(QtG.QPen(QtG.QColor("blue"), w))
-        # self.setPos(-star["yang"], -star["zang"])
-        self.setPos(star["row"], -star["col"])
-
 
 class MonBox(QtW.QGraphicsRectItem):
     def __init__(self, star, parent=None):
@@ -267,7 +314,6 @@ class MonBox(QtW.QGraphicsRectItem):
         w = 5
         super().__init__(-(hw * 2), -(hw * 2), hw * 4, hw * 4, parent)
         self.setPen(QtG.QPen(QtG.QColor(255, 165, 0), w))
-        self.setPos(star["row"], -star["col"])
 
 
 class FieldOfView(QtW.QGraphicsItem):
@@ -321,29 +367,20 @@ class FieldOfView(QtW.QGraphicsItem):
 
     def _set_centroid_pos_for_attitude(self, attitude):
         yag, zag = self._centroids["YAGS"], self._centroids["ZAGS"]
-        row0, col0 = yagzag_to_pixels(yag, zag, allow_bad=True)
-        if attitude != self.attitude:
-            # the first attitude is the attitude of this frame,
-            # so we first get the ra/dec pointed to by the centroids
-            # and then calculate the position in the scene coordinate system
-            # for those ra/dec values
+        if attitude == self.attitude:
+            x, y = star_field_position(yag=yag, zag=zag)
+        else:
+            # `self.attitude` is the attitude represented by this field of view, but the scene's
+            # attitude is `attitude`. We first project back to get the ra/dec pointed to by the
+            # centroids using `self.attitude`, and calculate the position in the scene coordinate
+            # system using those ra/dec values
             ra, dec = yagzag_to_radec(yag, zag, self.attitude)
-            yag, zag = radec_to_yagzag(ra, dec, attitude)
-        row, col = yagzag_to_pixels(yag, zag, allow_bad=True)
+            x, y = star_field_position(attitude=attitude, ra=ra, dec=dec)
 
-        off_ccd = (
-            (row0 < -511)
-            | (row0 > 511)
-            | (col0 < -511)
-            | (col0 > 511)
-            | (self._centroids["IMGFID"])
-        )
+        self.set_show_centroids(self._centroids_visible)
+
         for i, centroid in enumerate(self.centroids):
-            if off_ccd[i]:
-                centroid.setVisible(False)
-            else:
-                centroid.setVisible(self._centroids_visible)
-            centroid.setPos(row[i], -col[i])
+            centroid.setPos(x[i], y[i])
 
     def boundingRect(self):
         return QtC.QRectF(0, 0, 1, 1)
@@ -364,6 +401,7 @@ class FieldOfView(QtW.QGraphicsItem):
 
     def set_show_centroids(self, show=True):
         self._centroids_visible = show
+        # centroids are hidden if they fall outside the CCD
         row, col = yagzag_to_pixels(
             self._centroids["YAGS"], self._centroids["ZAGS"], allow_bad=True
         )
@@ -415,6 +453,13 @@ class CameraOutline(QtW.QGraphicsItem):
         return QtC.QRectF(-w, -w, 2 * w, 2 * w)
 
     def paint(self, painter, _option, _widget):
+        if "x" not in self._frame["edge_1"]:
+            if self.scene() is not None and self.scene().attitude is not None:
+                self.set_pos_for_attitude(self.scene().attitude)
+            else:
+                # attitude has not been set, not drawing
+                return
+
         color = "lightGray" if self.simple else "black"
         pen = QtG.QPen(QtG.QColor(color))
         pen.setWidth(1)
@@ -426,28 +471,28 @@ class CameraOutline(QtW.QGraphicsItem):
         painter.setRenderHint(QtG.QPainter.Antialiasing, True)
 
         painter.setPen(pen)
-        for i in range(len(self._frame["edge_1"]["row"]) - 1):
+        for i in range(len(self._frame["edge_1"]["x"]) - 1):
             painter.drawLine(
                 QtC.QPointF(
-                    self._frame["edge_1"]["row"][i], -self._frame["edge_1"]["col"][i]
+                    self._frame["edge_1"]["x"][i], self._frame["edge_1"]["y"][i]
                 ),
                 QtC.QPointF(
-                    self._frame["edge_1"]["row"][i + 1],
-                    -self._frame["edge_1"]["col"][i + 1],
+                    self._frame["edge_1"]["x"][i + 1],
+                    self._frame["edge_1"]["y"][i + 1],
                 ),
             )
         if self.simple:
             painter.setRenderHint(QtG.QPainter.Antialiasing, anti_aliasing_set)
             return
 
-        for i in range(len(self._frame["edge_2"]["row"]) - 1):
+        for i in range(len(self._frame["edge_2"]["x"]) - 1):
             painter.drawLine(
                 QtC.QPointF(
-                    self._frame["edge_2"]["row"][i], -self._frame["edge_2"]["col"][i]
+                    self._frame["edge_2"]["x"][i], self._frame["edge_2"]["y"][i]
                 ),
                 QtC.QPointF(
-                    self._frame["edge_2"]["row"][i + 1],
-                    -self._frame["edge_2"]["col"][i + 1],
+                    self._frame["edge_2"]["x"][i + 1],
+                    self._frame["edge_2"]["y"][i + 1],
                 ),
             )
 
@@ -455,24 +500,24 @@ class CameraOutline(QtW.QGraphicsItem):
         magenta_pen.setCosmetic(True)
         magenta_pen.setWidth(1)
         painter.setPen(magenta_pen)
-        for i in range(len(self._frame["cross_2"]["row"]) - 1):
+        for i in range(len(self._frame["cross_2"]["x"]) - 1):
             painter.drawLine(
                 QtC.QPointF(
-                    self._frame["cross_2"]["row"][i], -self._frame["cross_2"]["col"][i]
+                    self._frame["cross_2"]["x"][i], self._frame["cross_2"]["y"][i]
                 ),
                 QtC.QPointF(
-                    self._frame["cross_2"]["row"][i + 1],
-                    -self._frame["cross_2"]["col"][i + 1],
+                    self._frame["cross_2"]["x"][i + 1],
+                    self._frame["cross_2"]["y"][i + 1],
                 ),
             )
-        for i in range(len(self._frame["cross_1"]["row"]) - 1):
+        for i in range(len(self._frame["cross_1"]["x"]) - 1):
             painter.drawLine(
                 QtC.QPointF(
-                    self._frame["cross_1"]["row"][i], -self._frame["cross_1"]["col"][i]
+                    self._frame["cross_1"]["x"][i], self._frame["cross_1"]["y"][i]
                 ),
                 QtC.QPointF(
-                    self._frame["cross_1"]["row"][i + 1],
-                    -self._frame["cross_1"]["col"][i + 1],
+                    self._frame["cross_1"]["x"][i + 1],
+                    self._frame["cross_1"]["y"][i + 1],
                 ),
             )
 
@@ -482,19 +527,19 @@ class CameraOutline(QtW.QGraphicsItem):
         """
         Set the item position given the scene attitude.
 
-        Note that the given attitude is NOT the attitude of the camera corresponding to this frame.
+        Note that the given attitude is NOT the attitude of the camera represented by this outline.
         It's the origin of the scene coordinate system.
         """
         if self._attitude is None:
             raise Exception("FieldOfView attitude is not set. Can't set position.")
+
         for key in self._frame:
-            # self._frame[key]["yag"] must not be modified
-            yag2, zag2 = radec_to_yagzag(
-                self._frame[key]["ra"], self._frame[key]["dec"], attitude
+            self._frame[key]["x"], self._frame[key]["y"] = star_field_position(
+                attitude,
+                ra=self._frame[key]["ra"],
+                dec=self._frame[key]["dec"],
             )
-            self._frame[key]["row"], self._frame[key]["col"] = yagzag_to_pixels(
-                yag2, zag2, allow_bad=True
-            )
+
         self.update()
 
     def set_attitude(self, attitude):

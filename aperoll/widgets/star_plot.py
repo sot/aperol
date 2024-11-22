@@ -5,10 +5,6 @@ import numpy as np
 import tables
 from astropy import units as u
 from astropy.table import Table, vstack
-from chandra_aca.transform import (
-    radec_to_yagzag,
-    yagzag_to_pixels,
-)
 from cxotime import CxoTime
 from PyQt5 import QtCore as QtC
 from PyQt5 import QtGui as QtG
@@ -16,7 +12,7 @@ from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
 
 from aperoll import utils
-from aperoll.star_field_items import Catalog, Centroid, FieldOfView, Star
+from aperoll.star_field_items import Catalog, Centroid, FieldOfView, Star, star_field_position
 
 
 @dataclass
@@ -579,15 +575,13 @@ class StarField(QtW.QGraphicsScene):
         if self._stars is not None and self._attitude is not None:
             # The calculation of row/col is done here so it can be vectorized
             # if done for each item, it is much slower.
-            self._stars["yang"], self._stars["zang"] = radec_to_yagzag(
-                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], self._attitude
+            x, y = star_field_position(
+                self._attitude,
+                ra=self._stars["RA_PMCORR"],
+                dec=self._stars["DEC_PMCORR"]
             )
-            self._stars["row"], self._stars["col"] = yagzag_to_pixels(
-                self._stars["yang"], self._stars["zang"], allow_bad=True
-            )
-            for item in self._stars:
-                # note that the coordinate system is (row, -col), which is (-yag, -zag)
-                item["graphic_item"].setPos(item["row"], -item["col"])
+            for idx, item in enumerate(self._stars):
+                item["graphic_item"].setPos(x[idx], y[idx])
 
     def set_time(self, time):
         if time != self._time:
