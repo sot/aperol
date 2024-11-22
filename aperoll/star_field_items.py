@@ -279,9 +279,10 @@ class Centroid(QtW.QGraphicsEllipseItem):
         pen = QtG.QPen(color, w)
         self.setPen(pen)
 
-        self._line_1 = QtW.QGraphicsLineItem(-s, 0, s, 0, self)
+        s /= np.sqrt(2)
+        self._line_1 = QtW.QGraphicsLineItem(-s, -s, s, s, self)
         self._line_1.setPen(pen)
-        self._line_2 = QtW.QGraphicsLineItem(0, -s, 0, s, self)
+        self._line_2 = QtW.QGraphicsLineItem(s, -s, -s, s, self)
         self._line_2.setPen(pen)
 
         self._label = QtW.QGraphicsTextItem(f"{imgnum}", self)
@@ -535,7 +536,7 @@ class FieldOfView(QtW.QGraphicsItem):
         centroids : astropy.table.Table
             A table with the following columns: IMGNUM, AOACMAG, YAGS, ZAGS, IMGFID.
         """
-        missing_cols = set(centroids.dtype.names) - set(self._centroids.dtype.names)
+        missing_cols = {"IMGNUM", "AOACMAG", "YAGS", "ZAGS", "IMGFID"} - set(centroids.dtype.names)
         if missing_cols:
             raise ValueError(f"Missing columns in centroids: {missing_cols}")
 
@@ -569,17 +570,21 @@ class FieldOfView(QtW.QGraphicsItem):
     show_centroids = property(get_show_centroids, set_show_centroids)
 
     def get_centroid_table(self):
-        self._centroids["MAG_ACA"] = [
-            (centroid.excluded or not centroid.isVisible())
-            for centroid in self.centroids
-        ]
+        """
+        Returns the centroid data as an astropy table, including whether each centroid is visible.
 
+        This is here for debugging purposes.
+        """
         table = Table()
         table["IMGNUM"] = self._centroids["IMGNUM"]
-        table["MAG_ACA"] = self._centroids["MAG_ACA"]
-        table["excluded"] = self._centroids["MAG_ACA"]
+        table["AOACMAG"] = self._centroids["AOACMAG"]
         table["YAG"] = self._centroids["YAGS"]
         table["ZAG"] = self._centroids["ZAGS"]
+        table["IMGFID"] = self._centroids["IMGFID"]
+        table["excluded"] = self._centroids["excluded"]
+        table["visible"] = [
+            centroid.isVisible() for centroid in self.centroids
+        ]
 
         return table
 
