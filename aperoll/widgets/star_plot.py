@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import agasc
 import numpy as np
@@ -442,13 +442,15 @@ class StarField(QtW.QGraphicsScene):
         return self._state
 
     def set_state(self, state_name):
-        self._state = self.states[state_name]
+        # copy self.states[state_name] so self.states[state_name] is not modified
+        self._state = replace(self.states[state_name])
 
         self.enable_fov(self._state.enable_fov)
         self.enable_alternate_fov(self._state.enable_alternate_fov)
         self.enable_catalog(self._state.enable_catalog)
         self.alternate_fov.show_centroids = self._state.enable_alternate_fov_centroids
         self.main_fov.show_centroids = self._state.enable_centroids
+        self.onboard_attitude_slot = self._state.onboard_attitude_slot
 
         self.state_changed.emit(state_name)
 
