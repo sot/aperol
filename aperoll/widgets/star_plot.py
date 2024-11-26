@@ -740,6 +740,7 @@ class StarPlot(QtW.QWidget):
         if (
             self._catalog is not None
             and (len(self._catalog) == len(catalog))
+            and (self._catalog.dtype == catalog.dtype)
             and np.all(self._catalog == catalog)
         ):
             return
