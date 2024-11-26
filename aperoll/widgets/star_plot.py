@@ -69,7 +69,7 @@ _COMMON_STATES = [
     {
         # use case: "alternate" real-time telemetry
         # (attitude set to user attitude, but showing the camera outline in the alternate FOV)
-        "name": "Alternate",
+        "name": "Alternate FOV",
         "onboard_attitude_slot": "alternate_attitude",
         "enable_fov": True,
         "enable_alternate_fov": True,
@@ -98,21 +98,6 @@ class StarView(QtW.QGraphicsView):
         self._moving = False
 
         self._draw_frame = False
-
-        application = QtW.QApplication.instance()
-        main_windows = [
-            w for w in application.topLevelWidgets() if isinstance(w, QtW.QMainWindow)
-        ]
-        for window in main_windows:
-            menu_bar = window.menuBar()
-            menu = menu_bar.addMenu("Aperoll")
-            menu = menu.addMenu("Star Field Quick Config")
-            for state in self.scene().states.values():
-                action = QtW.QAction(state.name, self)
-                action.triggered.connect(
-                    lambda _checked, name=state.name: self.scene().set_state(name)
-                )
-                menu.addAction(action)
 
     def _get_draw_frame(self):
         return self._draw_frame
@@ -304,6 +289,12 @@ class StarView(QtW.QGraphicsView):
         reset_fov_action = QtW.QAction("Reset Alt FOV", menu, checkable=False)
         menu.addAction(reset_fov_action)
 
+        config_menu = menu.addMenu("Quick Config")
+
+        for state in self.scene().states.values():
+            action = QtW.QAction(state.name, config_menu)
+            config_menu.addAction(action)
+
         result = menu.exec_(event.globalPos())
         if result is not None:
             if centroid is not None and result.text().startswith("include slot"):
@@ -333,6 +324,8 @@ class StarView(QtW.QGraphicsView):
                 self.scene().state.auto_proseco = result.isChecked()
                 if result.isChecked():
                     self.update_proseco.emit()
+            elif result.text() in self.scene().states:
+                self.scene().set_state(result.text())
             else:
                 print(f"Action {result.text()} not implemented")
         event.accept()
