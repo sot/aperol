@@ -453,7 +453,8 @@ class FieldOfView(QtW.QGraphicsItem):
         self.attitude = attitude
         self.centroids = [Centroid(i, parent=self) for i in range(8)]
         self._centroids = np.array(
-            [(0, 511, 511, 511, 511, 14, 0, 0, 0, 0) for _ in self.centroids],
+            # pixels right outside the CCD by default
+            [(0, 511, 511, 511, 511, 14, -2490, 2507, False, False) for _ in self.centroids],
             dtype=[
                 ("IMGNUM", int),
                 ("IMGROW0_8X8", float),
