@@ -1,8 +1,11 @@
 # from PyQt5 import QtCore as QtC, QtWidgets as QtW, QtGui as QtG
+import traceback
+
 import PyQt5.QtGui as QtG
 import PyQt5.QtWebEngineWidgets as QtWe
 import PyQt5.QtWidgets as QtW
 from PyQt5 import QtCore as QtC
+from sparkles.core import ACAReviewTable, check_catalog
 
 STYLE = """
   <style>
@@ -85,7 +88,7 @@ class WebPage(QtWe.QWebEnginePage):
         page.deleteLater()
 
 
-class StarcatView(QtW.QTextEdit):
+class StarcatReview(QtW.QTextEdit):
     def __init__(self, catalog=None, parent=None):
         super().__init__(parent)
         font = QtG.QFont("Courier New")  # setting a fixed-width font (close enough)
@@ -101,7 +104,37 @@ class StarcatView(QtW.QTextEdit):
         if catalog is None:
             self.setText("")
         else:
-            self.setText(f"{STYLE}<pre>{catalog.get_text_pre()}</pre>")
+            try:
+                self.the_cat = catalog
+                if not (
+                    catalog.acqs
+                    and catalog.guides
+                    and catalog.dither_acq
+                    and catalog.dither_guide
+                ):
+                    lines = catalog.pformat()
+                    lines += [
+                        "\n\n<span class='critical'> No review performed "
+                        "(acqs/guides are empty or dither_acq/guide are None) <span>"
+                    ]
+                    text = "\n".join(lines)
+                else:
+                    aca = ACAReviewTable(catalog)
+                    check_catalog(aca)
+                    text = aca.get_text_pre()
+            except Exception as exc:
+                lines = [
+                    "<span class='critical'>A review could not be performed:</span>",
+                    "",
+                    f'<span class="critical">    {type(exc).__name__} {exc} </span>',
+                ]
+                trace = traceback.extract_tb(exc.__traceback__)
+                for step in trace:
+                    lines.append(f"    in {step.filename}:{step.lineno}/{step.name}:")
+                    lines.append(f"        {step.line}")
+                text = "\n".join(lines)
+
+            self.setText(f"{STYLE}<pre>{text}</pre>")
 
     def resizeEvent(self, _size):
         super().resizeEvent(_size)
