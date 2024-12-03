@@ -1,4 +1,4 @@
-name: Conda build
+name: Build Release
 on:
   release:
     types:

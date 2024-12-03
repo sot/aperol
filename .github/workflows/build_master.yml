@@ -1,8 +1,8 @@
-name: Conda build
+name: Build Master
 on:
   push:
     branches:
-    - master
+    - main
 
 jobs:
   build:
