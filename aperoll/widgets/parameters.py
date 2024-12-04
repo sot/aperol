@@ -29,9 +29,10 @@ class LineEdit(QtW.QLineEdit):
         super().__init__(parent)
         self._prev_text = self.text()
 
-    def setText(self, text):
+    def setText(self, text, emit=False):
         super().setText(text)
-        self._check_value()
+        # in the following, emit=False so the signal is not emitted
+        self._check_value(emit=emit)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
@@ -42,10 +43,11 @@ class LineEdit(QtW.QLineEdit):
         super().focusOutEvent(event)
         self._check_value()
 
-    def _check_value(self):
+    def _check_value(self, emit=True):
         if self.text() != self._prev_text:
             self._prev_text = self.text()
-            self.value_changed.emit(self.text())
+            if emit:
+                self.value_changed.emit(self.text())
 
 
 def get_default_parameters():
@@ -451,9 +453,9 @@ class Parameters(QtW.QWidget):
             self.do_it.emit()
 
     def set_ra_dec(self, ra, dec, roll):
-        self.ra_edit.setText(f"{ra:.8f}")
-        self.dec_edit.setText(f"{dec:.8f}")
-        self.roll_edit.setText(f"{roll:.8f}")
+        self.ra_edit.setText(f"{ra:.8f}", emit=True)
+        self.dec_edit.setText(f"{dec:.8f}", emit=True)
+        self.roll_edit.setText(f"{roll:.8f}", emit=True)
 
     def include_star(self, star, type, include):
         if include is True:
