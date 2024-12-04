@@ -153,7 +153,7 @@ class MainWindow(QtW.QMainWindow):
         self.parameters.reset.connect(self._reset)
         self.parameters.draw_test.connect(self._draw_test)
         self.parameters.parameters_changed.connect(self._parameters_changed)
-        self.plot.attitude_changed.connect(self.parameters.set_ra_dec)
+        self.plot.attitude_changed_eq.connect(self.parameters.set_ra_dec)
 
         self._data = Data(self.parameters.proseco_args())
         self.outdir = Path(os.getcwd())

@@ -675,7 +675,8 @@ class StarField(QtW.QGraphicsScene):
 
 
 class StarPlot(QtW.QWidget):
-    attitude_changed = QtC.pyqtSignal(float, float, float)
+    attitude_changed_eq = QtC.pyqtSignal(float, float, float)
+    attitude_changed = QtC.pyqtSignal(Quat)
     include_star = QtC.pyqtSignal(int, str, object)
     update_proseco = QtC.pyqtSignal()
 
@@ -709,7 +710,8 @@ class StarPlot(QtW.QWidget):
 
     def _attitude_changed(self):
         if self.scene.attitude is not None:
-            self.attitude_changed.emit(
+            self.attitude_changed.emit(self.scene.attitude)
+            self.attitude_changed_eq.emit(
                 self.scene.attitude.ra,
                 self.scene.attitude.dec,
                 self.scene.attitude.roll,
