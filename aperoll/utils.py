@@ -1,3 +1,6 @@
+import functools
+import traceback
+
 import numpy as np
 from chandra_aca.transform import (
     pixels_to_yagzag,
@@ -18,6 +21,62 @@ YZ_ORIGIN = pixels_to_yagzag(0, 0)
 
 class AperollException(RuntimeError):
     pass
+
+
+def log_exception(msg, exc, level="DEBUG"):
+    import logging
+    trace = traceback.extract_tb(exc.__traceback__)
+    level = logging.__getattribute__(level)
+    logger.log(level, f"{msg}: {exc}")
+    for step in trace:
+        logger.log(level, f"    in {step.filename}:{step.lineno}/{step.name}:")
+        logger.log(level, f"        {step.line}")
+
+
+def single_entry(func):
+    """
+    Decorator to prevent a function from being called again before it finished (recursively).
+
+    This can be used in a function that emits a signal. If the signal triggers a second function
+    which in turn calls the first function, that can potentially create an infinite loop. This
+    decorator just drops the second call.
+
+    NOTES:
+
+    - This decorator assumes that the decorated function has no return value.
+    - This prevents any concurrent use of the funtion.
+
+    This is not completely fail-safe, because the second function call might happen after the first
+    function finished. This happens if the connection is queued. Most connections are direct
+    (the slot is called immediately) but they can be queued (the slot is called later) if the caller
+    and callee are in different threads, or if the signals is explicitly created as queued.
+
+    Generally speaking, this is a hack and should not be needed, but it is useful.
+
+    There are a few ways to break the recursion other than using this decorator:
+    - make sure the setters do not enter the function if there will be no effect
+      (i.e.: a set_value function checks the current value and returns if it is the same).
+    - Have two signals, one that is emitted in response to "internal" changes and another that is
+      emitted in response to external changes. One can then respond to internal changes only
+      (e.g.: The LineEdit class as a textEdited signal emitted whenever the text is edited in the
+      widget and a textChanged signal emitted whenever the text is changed using setText).
+    - Have two slots: one is private and emits a signal, and the other is public and does not emit.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            if not wrapper.busy:
+                wrapper.busy = True
+                res = func(*args, **kwargs)
+                wrapper.busy = False
+                return res
+        except Exception:
+            wrapper.busy = False
+            raise
+
+    wrapper.busy = False
+    return wrapper
 
 
 def get_camera_fov_frame():
