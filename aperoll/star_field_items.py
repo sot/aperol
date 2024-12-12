@@ -301,6 +301,7 @@ class Centroid(QtW.QGraphicsEllipseItem):
         self.setPen(pen)
         self._line_1.setPen(pen)
         self._line_2.setPen(pen)
+        self._label.setDefaultTextColor(color)
 
     def set_fiducial(self, fiducial):
         color = QtG.QColor("red") if fiducial else QtG.QColor("blue")
@@ -309,6 +310,7 @@ class Centroid(QtW.QGraphicsEllipseItem):
         self.setPen(pen)
         self._line_1.setPen(pen)
         self._line_2.setPen(pen)
+        self._label.setDefaultTextColor(color)
 
 
 class FidLight(QtW.QGraphicsEllipseItem):
