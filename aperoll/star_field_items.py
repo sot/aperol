@@ -270,7 +270,7 @@ class Centroid(QtW.QGraphicsEllipseItem):
         The parent item.
     """
 
-    def __init__(self, imgnum, parent=None):
+    def __init__(self, imgnum, parent=None, fiducial=False):
         self.imgnum = imgnum
         self.excluded = False
         s = 18
@@ -283,34 +283,32 @@ class Centroid(QtW.QGraphicsEllipseItem):
 
         s /= np.sqrt(2)
         self._line_1 = QtW.QGraphicsLineItem(-s, -s, s, s, self)
-        self._line_1.setPen(pen)
         self._line_2 = QtW.QGraphicsLineItem(s, -s, -s, s, self)
-        self._line_2.setPen(pen)
 
         self._label = QtW.QGraphicsTextItem(f"{imgnum}", self)
         self._label.setFont(QtG.QFont("Arial", 30))
-        self._label.setDefaultTextColor(color)
         self._label.setPos(30, -30)
+
+        self.fiducial = fiducial
+        self._set_style()
+
+    def _set_style(self):
+        color = QtG.QColor("red") if self.fiducial else QtG.QColor("blue")
+        color.setAlpha(85 if self.excluded else 255)
+        pen = self.pen()
+        pen.setColor(color)
+        self.setPen(pen)
+        self._line_1.setPen(pen)
+        self._line_2.setPen(pen)
+        self._label.setDefaultTextColor(color)
 
     def set_excluded(self, excluded):
         self.excluded = excluded
-        pen = self.pen()
-        color = pen.color()
-        color.setAlpha(85 if excluded else 255)
-        pen.setColor(color)
-        self.setPen(pen)
-        self._line_1.setPen(pen)
-        self._line_2.setPen(pen)
-        self._label.setDefaultTextColor(color)
+        self._set_style()
 
     def set_fiducial(self, fiducial):
-        color = QtG.QColor("red") if fiducial else QtG.QColor("blue")
-        pen = self.pen()
-        pen.setColor(color)
-        self.setPen(pen)
-        self._line_1.setPen(pen)
-        self._line_2.setPen(pen)
-        self._label.setDefaultTextColor(color)
+        self.fiducial = fiducial
+        self._set_style()
 
 
 class FidLight(QtW.QGraphicsEllipseItem):
