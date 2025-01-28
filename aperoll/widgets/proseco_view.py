@@ -216,8 +216,13 @@ class ProsecoView(QtW.QWidget):
         )
         self.proseco_params_widget["obsid"] = int(params["obsid"])
         self.proseco_params_widget["detector"] = params["instrument"]
-        self.proseco_params_widget["t_ccd_acq"] = params["t_ccd"]
-        self.proseco_params_widget["t_ccd_guide"] = params["t_ccd"]
+
+        self.proseco_params_widget["t_ccd_acq"] = params.get(
+            "t_ccd_acq", params.get("t_ccd", None)
+        )
+        self.proseco_params_widget["t_ccd_guide"] = params.get(
+            "t_ccd_guide", params.get("t_ccd", None)
+        )
         self.proseco_params_widget["man_angle"] = params["man_angle"]
         self.proseco_params_widget["dither_acq"] = (
             params["dither_acq_y"],
