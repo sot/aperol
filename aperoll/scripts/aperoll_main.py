@@ -4,7 +4,7 @@
 from PyQt5 import QtWidgets as QtW
 
 from aperoll.utils import AperollException, logger
-from aperoll.widgets.main_window import MainWindow
+from aperoll.widgets.proseco_view import ProsecoView
 
 
 def get_parser():
@@ -14,7 +14,7 @@ def get_parser():
     parse.add_argument("file", nargs="?", default=None)
     parse.add_argument("--obsid", help="Specify the OBSID", type=int)
     levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-    levels = [lvl.lower() for lvl in levels]
+    levels += [lvl.lower() for lvl in levels]
     parse.add_argument(
         "--log-level", help="Set the log level", default="INFO", choices=levels
     )
@@ -25,11 +25,12 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    logger.setLevel(args.log_level)
+    logger.setLevel(args.log_level.upper())
 
     try:
         app = QtW.QApplication([])
-        w = MainWindow(opts=vars(args))
+        w = QtW.QMainWindow()
+        w.setCentralWidget(ProsecoView(opts=vars(args)))
         w.resize(1500, 1000)
         w.show()
         app.exec()

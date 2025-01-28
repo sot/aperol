@@ -5,7 +5,7 @@ import numpy as np
 import tables
 from astropy import units as u
 from astropy.table import Table, vstack
-from cxotime import CxoTime
+from cxotime import CxoTime, convert_time_format
 from PyQt5 import QtCore as QtC
 from PyQt5 import QtGui as QtG
 from PyQt5 import QtWidgets as QtW
@@ -83,6 +83,7 @@ _COMMON_STATES = [
 
 class StarView(QtW.QGraphicsView):
     include_star = QtC.pyqtSignal(int, str, object)
+    include_slot = QtC.pyqtSignal(int, bool)
     update_proseco = QtC.pyqtSignal()
 
     def __init__(self, scene=None):
@@ -253,7 +254,7 @@ class StarView(QtW.QGraphicsView):
             excl_action.setChecked(star.included["guide"] is False)
             menu.addAction(excl_action)
 
-        if centroid is not None:
+        if centroid is not None and not centroid.fiducial:
             incl_action = QtW.QAction(
                 f"include slot {centroid.imgnum}", menu, checkable=True
             )
@@ -299,6 +300,7 @@ class StarView(QtW.QGraphicsView):
         if result is not None:
             if centroid is not None and result.text().startswith("include slot"):
                 centroid.set_excluded(not result.isChecked())
+                self.include_slot.emit(centroid.imgnum, not centroid.excluded)
             elif stars and result.text().split()[0] in ["include", "exclude"]:
                 action, action_type = result.text().split()
                 if action == "include":
@@ -441,6 +443,7 @@ class StarField(QtW.QGraphicsScene):
     def get_state(self):
         return self._state
 
+    @utils.single_entry
     def set_state(self, state_name):
         # copy self.states[state_name] so self.states[state_name] is not modified
         self._state = replace(self.states[state_name])
@@ -558,7 +561,7 @@ class StarField(QtW.QGraphicsScene):
         # this does roughly the same:
         # yag, zag = pixels_to_yagzag(-dx, dy)
         # dq = Quat(equatorial=[(yag - YZ_ORIGIN[0]) / 3600, (zag - YZ_ORIGIN[1]) / 3600, 0])
-        self.set_attitude(self._attitude * dq)
+        self.set_attitude(self._attitude * dq, emit=True)
 
     def rotate_scene(self, angle, around=None):
         """
@@ -568,7 +571,7 @@ class StarField(QtW.QGraphicsScene):
             return
 
         dq = Quat(equatorial=[0, 0, -angle])
-        self.set_attitude(self._attitude * dq)
+        self.set_attitude(self._attitude * dq, emit=True)
 
     def set_star_positions(self):
         if self._stars is not None and self._attitude is not None:
@@ -595,12 +598,16 @@ class StarField(QtW.QGraphicsScene):
     def add_catalog(self, starcat):
         self.catalog.reset(starcat)
 
-    def set_attitude(self, attitude):
+    @utils.single_entry
+    def set_attitude(self, attitude, emit=False):
         """
         Set the attitude of the scene, rotating the items to the given attitude.
         """
-
-        if attitude != self._attitude:
+        # here I had the following line, and it crashed with a RecursionError
+        # if attitude != self._attitude:
+        q1 = None if self._attitude is None else self._attitude.q
+        q2 = None if attitude is None else Quat(attitude).q
+        if not np.all(q1 == q2):
             if self.catalog is not None:
                 self.catalog.set_pos_for_attitude(attitude)
 
@@ -617,7 +624,8 @@ class StarField(QtW.QGraphicsScene):
 
             self._attitude = attitude
             self.update_stars()
-            self.attitude_changed.emit()
+            if emit:
+                self.attitude_changed.emit()
 
     def get_attitude(self):
         return self._attitude
@@ -642,6 +650,7 @@ class StarField(QtW.QGraphicsScene):
         """
         if self.onboard_attitude_slot == "attitude":
             self.attitude = attitude
+            self.attitude_changed.emit()
         elif self.onboard_attitude_slot == "alternate_attitude":
             self.alternate_attitude = attitude
 
@@ -675,8 +684,10 @@ class StarField(QtW.QGraphicsScene):
 
 
 class StarPlot(QtW.QWidget):
-    attitude_changed = QtC.pyqtSignal(float, float, float)
+    attitude_changed_eq = QtC.pyqtSignal(float, float, float)
+    attitude_changed = QtC.pyqtSignal(Quat)
     include_star = QtC.pyqtSignal(int, str, object)
+    include_slot = QtC.pyqtSignal(int, bool)
     update_proseco = QtC.pyqtSignal()
 
     def __init__(self, parent=None):
@@ -705,11 +716,13 @@ class StarPlot(QtW.QWidget):
         self.scene.changed.connect(self.view.set_visibility)
 
         self.view.include_star.connect(self.include_star)
+        self.view.include_slot.connect(self.include_slot)
         self.view.update_proseco.connect(self.update_proseco)
 
     def _attitude_changed(self):
         if self.scene.attitude is not None:
-            self.attitude_changed.emit(
+            self.attitude_changed.emit(self.scene.attitude)
+            self.attitude_changed_eq.emit(
                 self.scene.attitude.ra,
                 self.scene.attitude.dec,
                 self.scene.attitude.roll,
@@ -730,8 +743,13 @@ class StarPlot(QtW.QWidget):
         self.scene.set_onboard_attitude(attitude)
 
     def set_time(self, t):
-        self._time = CxoTime(t)
-        self.scene.time = self._time
+        # making this check to avoid infinite recursion
+        t1 = None if self._time is None else self._time.date
+        t2 = None if t is None else convert_time_format(t, fmt_out="date")
+        if t1 != t2:
+            t = CxoTime(t)
+            self._time = t
+            self.scene.time = t
 
     def highlight(self, agasc_ids):
         self._highlight = agasc_ids
@@ -770,7 +788,7 @@ class StarPlot(QtW.QWidget):
 
 
 def main():
-    from aperoll.widgets.parameters import get_default_parameters
+    from aperoll.utils import get_default_parameters
 
     params = get_default_parameters()
 
