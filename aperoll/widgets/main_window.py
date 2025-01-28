@@ -148,6 +148,7 @@ class MainWindow(QtW.QMainWindow):
         # self.plot.exclude_star.connect(self.parameters.exclude_star)
 
         self.parameters.do_it.connect(self._run_proseco)
+        self.plot.update_proseco.connect(self._run_proseco)
         self.parameters.run_sparkles.connect(self._run_sparkles)
         self.parameters.reset.connect(self._reset)
         self.parameters.draw_test.connect(self._draw_test)
@@ -181,6 +182,11 @@ class MainWindow(QtW.QMainWindow):
         if starcat is not None:
             self.plot.set_catalog(starcat)
             self.starcat_view.set_catalog(aca)
+            # make sure the catalog is not overwritten automatically
+            self.plot.scene.state.auto_proseco = False
+
+        if self.plot.scene.state.auto_proseco:
+            self._run_proseco()
 
     def closeEvent(self, event):
         if self.web_page is not None:
@@ -192,6 +198,8 @@ class MainWindow(QtW.QMainWindow):
         proseco_args = self.parameters.proseco_args()
         self.plot.set_base_attitude(proseco_args["att"])
         self._data.reset(proseco_args)
+        if self.plot.scene.state.auto_proseco and not self.plot.view.moving:
+            self._run_proseco()
 
     def _init(self):
         if self.parameters.values:
@@ -203,6 +211,7 @@ class MainWindow(QtW.QMainWindow):
             )
             self.plot.set_base_attitude(aca_attitude)
             self.plot.set_time(time)
+            self.plot.scene.state = "Proseco"
 
     def _reset(self):
         self.parameters.set_parameters(**self.opts)

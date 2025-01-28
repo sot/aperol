@@ -1,5 +1,8 @@
 import numpy as np
-from chandra_aca.transform import pixels_to_yagzag, yagzag_to_pixels
+from chandra_aca.transform import (
+    pixels_to_yagzag,
+    yagzag_to_pixels,
+)
 from ska_helpers import logging
 
 logger = logging.basic_logger("aperoll")
@@ -59,9 +62,9 @@ def get_camera_fov_frame():
         "col": cross_1[1],
     }
 
-    for key in frame:
-        frame[key]["yag"], frame[key]["zag"] = pixels_to_yagzag(
-            frame[key]["row"], frame[key]["col"], allow_bad=True
+    for value in frame.values():
+        value["yag"], value["zag"] = pixels_to_yagzag(
+            value["row"], value["col"], allow_bad=True
         )
 
     return frame

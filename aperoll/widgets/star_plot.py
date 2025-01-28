@@ -1,12 +1,10 @@
+from dataclasses import dataclass, replace
+
 import agasc
 import numpy as np
 import tables
 from astropy import units as u
 from astropy.table import Table, vstack
-from chandra_aca.transform import (
-    radec_to_yagzag,
-    yagzag_to_pixels,
-)
 from cxotime import CxoTime
 from PyQt5 import QtCore as QtC
 from PyQt5 import QtGui as QtG
@@ -14,11 +12,78 @@ from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
 
 from aperoll import utils
-from aperoll.star_field_items import Catalog, Star
+from aperoll.star_field_items import (
+    Catalog,
+    Centroid,
+    FieldOfView,
+    Star,
+    star_field_position,
+)
+
+
+@dataclass
+class StarFieldState:
+    """
+    Dataclass to hold the state of the star field.
+
+    The state includes all flags that determine the visibility of different elements and the
+    behavior of the star field.
+    """
+
+    name: str = ""
+    # regular attitude updates are used to set `attitude`, `alternate_attitude` or None.
+    onboard_attitude_slot: str | None = "attitude"
+    enable_fov: bool = True
+    enable_alternate_fov: bool = False
+    enable_catalog: bool = False
+    enable_centroids: bool = True
+    enable_alternate_fov_centroids: bool = False
+    auto_proseco: bool = False
+
+
+_COMMON_STATES = [
+    {
+        # use case: real-time telemetry.
+        # (attitude set to on-board attitude, catalog off, centroids on)
+        "name": "Telemetry",
+        "onboard_attitude_slot": "attitude",
+        "enable_fov": True,
+        "enable_alternate_fov": False,
+        "enable_catalog": False,
+        "enable_centroids": True,
+        "enable_alternate_fov_centroids": False,
+        "auto_proseco": False,
+    },
+    {
+        # use case: standard aperoll use.
+        # (on-board attitude never updated, catalog on, centroids off, auto-proseco)
+        "name": "Proseco",
+        "onboard_attitude_slot": None,
+        "enable_fov": True,
+        "enable_alternate_fov": False,
+        "enable_catalog": True,
+        "enable_centroids": False,
+        "enable_alternate_fov_centroids": False,
+        "auto_proseco": True,
+    },
+    {
+        # use case: "alternate" real-time telemetry
+        # (attitude set to user attitude, but showing the camera outline in the alternate FOV)
+        "name": "Alternate FOV",
+        "onboard_attitude_slot": "alternate_attitude",
+        "enable_fov": True,
+        "enable_alternate_fov": True,
+        "enable_catalog": False,
+        "enable_centroids": False,
+        "enable_alternate_fov_centroids": True,
+        "auto_proseco": False,
+    },
+]
 
 
 class StarView(QtW.QGraphicsView):
     include_star = QtC.pyqtSignal(int, str, object)
+    update_proseco = QtC.pyqtSignal()
 
     def __init__(self, scene=None):
         super().__init__(scene)
@@ -32,7 +97,7 @@ class StarView(QtW.QGraphicsView):
         self._rotating = False
         self._moving = False
 
-        self._draw_frame = True
+        self._draw_frame = False
 
     def _get_draw_frame(self):
         return self._draw_frame
@@ -65,6 +130,8 @@ class StarView(QtW.QGraphicsView):
                 self._moving = True
 
         if self._moving or self._rotating:
+            if self.scene().onboard_attitude_slot == "attitude":
+                self.scene().onboard_attitude_slot = "alternate_attitude"
             end_pos = self.mapToScene(pos)
             start_pos = self.mapToScene(self._start)
             if self._moving:
@@ -86,12 +153,19 @@ class StarView(QtW.QGraphicsView):
     def mouseReleaseEvent(self, event):
         if event.button() == QtC.Qt.LeftButton:
             self._start = None
+            if (self._moving or self._rotating) and self.scene().state.auto_proseco:
+                self.update_proseco.emit()
 
     def mousePressEvent(self, event):
         if event.button() == QtC.Qt.LeftButton:
             self._moving = False
             self._rotating = False
             self._start = event.pos()
+
+    def get_moving(self):
+        return self._moving or self._rotating
+
+    moving = property(get_moving)
 
     def wheelEvent(self, event):
         scale = 1 + 0.5 * event.angleDelta().y() / 360
@@ -151,41 +225,109 @@ class StarView(QtW.QGraphicsView):
             )
         painter.setRenderHint(QtG.QPainter.Antialiasing, anti_aliasing_set)
 
-    def contextMenuEvent(self, event):
-        items = [item for item in self.items(event.pos()) if isinstance(item, Star)]
-        if not items:
-            return
-        item = items[0]
+    def contextMenuEvent(self, event):  # noqa: PLR0912, PLR0915
+        stars = [item for item in self.items(event.pos()) if isinstance(item, Star)]
+        star = stars[0] if stars else None
+
+        centroids = [
+            item for item in self.items(event.pos()) if isinstance(item, Centroid)
+        ]
+        centroid = centroids[0] if centroids else None
 
         menu = QtW.QMenu()
 
-        incl_action = QtW.QAction("include acq", menu, checkable=True)
-        incl_action.setChecked(item.included["acq"] is True)
-        menu.addAction(incl_action)
+        if star is not None:
+            incl_action = QtW.QAction("include acq", menu, checkable=True)
+            incl_action.setChecked(star.included["acq"] is True)
+            menu.addAction(incl_action)
 
-        excl_action = QtW.QAction("exclude acq", menu, checkable=True)
-        excl_action.setChecked(item.included["acq"] is False)
-        menu.addAction(excl_action)
+            excl_action = QtW.QAction("exclude acq", menu, checkable=True)
+            excl_action.setChecked(star.included["acq"] is False)
+            menu.addAction(excl_action)
 
-        incl_action = QtW.QAction("include guide", menu, checkable=True)
-        incl_action.setChecked(item.included["guide"] is True)
-        menu.addAction(incl_action)
+            incl_action = QtW.QAction("include guide", menu, checkable=True)
+            incl_action.setChecked(star.included["guide"] is True)
+            menu.addAction(incl_action)
 
-        excl_action = QtW.QAction("exclude guide", menu, checkable=True)
-        excl_action.setChecked(item.included["guide"] is False)
-        menu.addAction(excl_action)
+            excl_action = QtW.QAction("exclude guide", menu, checkable=True)
+            excl_action.setChecked(star.included["guide"] is False)
+            menu.addAction(excl_action)
+
+        if centroid is not None:
+            incl_action = QtW.QAction(
+                f"include slot {centroid.imgnum}", menu, checkable=True
+            )
+            incl_action.setChecked(not centroid.excluded)
+            menu.addAction(incl_action)
+
+        show_catalog_action = QtW.QAction("Show Catalog", menu, checkable=True)
+        show_catalog_action.setChecked(self.scene().state.enable_catalog)
+        menu.addAction(show_catalog_action)
+
+        show_fov_action = QtW.QAction("Show Alt FOV", menu, checkable=True)
+        show_fov_action.setChecked(self.scene().state.enable_alternate_fov)
+        menu.addAction(show_fov_action)
+
+        show_alt_fov_action = QtW.QAction("Show FOV", menu, checkable=True)
+        show_alt_fov_action.setChecked(self.scene().state.enable_fov)
+        menu.addAction(show_alt_fov_action)
+
+        show_centroids_action = QtW.QAction("Show Centroids", menu, checkable=True)
+        show_centroids_action.setChecked(self.scene().main_fov.show_centroids)
+        menu.addAction(show_centroids_action)
+
+        show_alt_centroids_action = QtW.QAction(
+            "Show Alt Centroids", menu, checkable=True
+        )
+        show_alt_centroids_action.setChecked(self.scene().alternate_fov.show_centroids)
+        menu.addAction(show_alt_centroids_action)
+
+        set_auto_proseco_action = QtW.QAction("Auto-proseco", menu, checkable=True)
+        set_auto_proseco_action.setChecked(self.scene().state.auto_proseco)
+        menu.addAction(set_auto_proseco_action)
+
+        reset_fov_action = QtW.QAction("Reset Alt FOV", menu, checkable=False)
+        menu.addAction(reset_fov_action)
+
+        config_menu = menu.addMenu("Quick Config")
+
+        for state in self.scene().states.values():
+            action = QtW.QAction(state.name, config_menu)
+            config_menu.addAction(action)
 
         result = menu.exec_(event.globalPos())
         if result is not None:
-            action, action_type = result.text().split()
-            if items:
+            if centroid is not None and result.text().startswith("include slot"):
+                centroid.set_excluded(not result.isChecked())
+            elif stars and result.text().split()[0] in ["include", "exclude"]:
+                action, action_type = result.text().split()
                 if action == "include":
-                    item.included[action_type] = True if result.isChecked() else None
+                    star.included[action_type] = True if result.isChecked() else None
                 elif action == "exclude":
-                    item.included[action_type] = False if result.isChecked() else None
+                    star.included[action_type] = False if result.isChecked() else None
                 self.include_star.emit(
-                    item.star["AGASC_ID"], action_type, item.included[action_type]
+                    star.star["AGASC_ID"], action_type, star.included[action_type]
                 )
+            elif result.text() == "Show FOV":
+                self.scene().enable_fov(result.isChecked())
+            elif result.text() == "Show Alt FOV":
+                self.scene().enable_alternate_fov(result.isChecked())
+            elif result.text() == "Show Catalog":
+                self.scene().enable_catalog(result.isChecked())
+            elif result.text() == "Show Centroids":
+                self.scene().main_fov.show_centroids = result.isChecked()
+            elif result.text() == "Show Alt Centroids":
+                self.scene().alternate_fov.show_centroids = result.isChecked()
+            elif result.text() == "Reset Alt FOV":
+                self.scene().alternate_fov.set_attitude(self.scene().attitude)
+            elif result.text() == "Auto-proseco":
+                self.scene().state.auto_proseco = result.isChecked()
+                if result.isChecked():
+                    self.update_proseco.emit()
+            elif result.text() in self.scene().states:
+                self.scene().set_state(result.text())
+            else:
+                print(f"Action {result.text()} not implemented")
         event.accept()
 
     def resizeEvent(self, event):
@@ -207,8 +349,6 @@ class StarView(QtW.QGraphicsView):
             side = max(np.abs(tl.x() - br.x()), np.abs(tl.y() - br.y()))
             radius = 1.5 * (side / 2) * 5 / 3600  # 5 arcsec per pixel, radius in degree
 
-            self.draw_frame = radius < 6
-
             r = agasc.sphere_dist(
                 self.scene().attitude.ra,
                 self.scene().attitude.dec,
@@ -223,6 +363,9 @@ class StarView(QtW.QGraphicsView):
                     item["graphic_item"].hide()
                 else:
                     item["graphic_item"].show()
+
+            self.scene().show_fov(radius < 6)
+            self.scene().show_alternate_fov(radius < 6)
 
     def set_item_scale(self):
         if self.scene()._stars is not None:
@@ -258,6 +401,7 @@ class StarView(QtW.QGraphicsView):
 
 class StarField(QtW.QGraphicsScene):
     attitude_changed = QtC.pyqtSignal()
+    state_changed = QtC.pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -265,10 +409,52 @@ class StarField(QtW.QGraphicsScene):
         self._attitude = None
         self._time = None
         self._stars = None
-        self._catalog = None
+
+        self.catalog = Catalog()
+        self.addItem(self.catalog)
 
         self._healpix_indices = set()
         self._update_radius = 2
+
+        # alternate fov added first so it never hides the main fov
+        self.alternate_fov = FieldOfView(alternate_outline=True)
+        self.addItem(self.alternate_fov)
+
+        self.main_fov = FieldOfView()
+        self.addItem(self.main_fov)
+
+        self.states = {
+            value["name"]: StarFieldState(**value) for value in _COMMON_STATES
+        }
+        self.set_state("Telemetry")
+
+    def get_onboard_attitude_slot(self):
+        return self.state.onboard_attitude_slot
+
+    def set_onboard_attitude_slot(self, attitude):
+        self.state.onboard_attitude_slot = attitude
+
+    onboard_attitude_slot = property(
+        get_onboard_attitude_slot, set_onboard_attitude_slot
+    )
+
+    def get_state(self):
+        return self._state
+
+    def set_state(self, state_name):
+        # copy self.states[state_name] so self.states[state_name] is not modified
+        self._state = replace(self.states[state_name])
+
+        self.enable_fov(self._state.enable_fov)
+        self.enable_alternate_fov(self._state.enable_alternate_fov)
+        self.enable_catalog(self._state.enable_catalog)
+        self.alternate_fov.show_centroids = self._state.enable_alternate_fov_centroids
+        self.main_fov.show_centroids = self._state.enable_centroids
+        self.onboard_attitude_slot = self._state.onboard_attitude_slot
+
+        self.state_changed.emit(state_name)
+
+    state = property(get_state, set_state)
 
     def update_stars(self, radius=None):
         if radius is not None:
@@ -388,15 +574,13 @@ class StarField(QtW.QGraphicsScene):
         if self._stars is not None and self._attitude is not None:
             # The calculation of row/col is done here so it can be vectorized
             # if done for each item, it is much slower.
-            self._stars["yang"], self._stars["zang"] = radec_to_yagzag(
-                self._stars["RA_PMCORR"], self._stars["DEC_PMCORR"], self._attitude
+            x, y = star_field_position(
+                self._attitude,
+                ra=self._stars["RA_PMCORR"],
+                dec=self._stars["DEC_PMCORR"],
             )
-            self._stars["row"], self._stars["col"] = yagzag_to_pixels(
-                self._stars["yang"], self._stars["zang"], allow_bad=True
-            )
-            for item in self._stars:
-                # note that the coordinate system is (row, -col), which is (-yag, -zag)
-                item["graphic_item"].setPos(item["row"], -item["col"])
+            for idx, item in enumerate(self._stars):
+                item["graphic_item"].setPos(x[idx], y[idx])
 
     def set_time(self, time):
         if time != self._time:
@@ -408,14 +592,29 @@ class StarField(QtW.QGraphicsScene):
 
     time = property(get_time, set_time)
 
+    def add_catalog(self, starcat):
+        self.catalog.reset(starcat)
+
     def set_attitude(self, attitude):
         """
         Set the attitude of the scene, rotating the items to the given attitude.
         """
 
         if attitude != self._attitude:
-            if self._catalog is not None:
-                self._catalog.set_pos_for_attitude(attitude)
+            if self.catalog is not None:
+                self.catalog.set_pos_for_attitude(attitude)
+
+            # the main FOV is always at the base attitude
+            self.main_fov.set_attitude(attitude)
+            self.main_fov.set_pos_for_attitude(attitude)
+            if self.alternate_fov.attitude is None:
+                # by default the alternate FOV is at the initial base attitude.
+                self.alternate_fov.set_attitude(attitude)
+            if self.alternate_fov.attitude is not None:
+                # after the first time, the alternate FOV is at the same attitude
+                # it is just moved around.
+                self.alternate_fov.set_pos_for_attitude(attitude)
+
             self._attitude = attitude
             self.update_stars()
             self.attitude_changed.emit()
@@ -425,17 +624,60 @@ class StarField(QtW.QGraphicsScene):
 
     attitude = property(get_attitude, set_attitude)
 
-    def add_catalog(self, starcat):
-        if self._catalog is not None:
-            self.removeItem(self._catalog)
+    def set_alternate_attitude(self, attitude=None):
+        self.alternate_fov.set_attitude(
+            attitude if attitude is not None else self.attitude
+        )
 
-        self._catalog = Catalog(starcat)
-        self.addItem(self._catalog)
+    def get_alternate_attitude(self):
+        return self.alternate_fov.attitude
+
+    alternate_attitude = property(get_alternate_attitude, set_alternate_attitude)
+
+    def set_onboard_attitude(self, attitude):
+        """
+        Set the on-board attitude from telemetry.
+
+        Sometimes the attitude from telemetry is not the same as the base attitude.
+        """
+        if self.onboard_attitude_slot == "attitude":
+            self.attitude = attitude
+        elif self.onboard_attitude_slot == "alternate_attitude":
+            self.alternate_attitude = attitude
+
+    def enable_alternate_fov(self, enable=True):
+        self.state.enable_alternate_fov = enable
+        self.alternate_fov.setVisible(enable)
+
+    def show_alternate_fov(self, show=True):
+        if self.state.enable_alternate_fov:
+            self.alternate_fov.setVisible(show)
+
+    def enable_fov(self, enable=True):
+        self.state.enable_fov = enable
+        self.main_fov.setVisible(enable)
+
+    def show_fov(self, show=True):
+        if self.state.enable_fov:
+            self.main_fov.setVisible(show)
+
+    def set_centroids(self, centroids):
+        self.main_fov.set_centroids(centroids)
+        self.alternate_fov.set_centroids(centroids)
+
+    def enable_catalog(self, enable=True):
+        self.state.enable_catalog = enable
+        self.catalog.setVisible(enable)
+
+    def show_catalog(self, show=True):
+        if self.state.enable_catalog:
+            self.catalog.setVisible(show)
 
 
 class StarPlot(QtW.QWidget):
     attitude_changed = QtC.pyqtSignal(float, float, float)
     include_star = QtC.pyqtSignal(int, str, object)
+    update_proseco = QtC.pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -463,6 +705,7 @@ class StarPlot(QtW.QWidget):
         self.scene.changed.connect(self.view.set_visibility)
 
         self.view.include_star.connect(self.include_star)
+        self.view.update_proseco.connect(self.update_proseco)
 
     def _attitude_changed(self):
         if self.scene.attitude is not None:
@@ -476,9 +719,15 @@ class StarPlot(QtW.QWidget):
         """
         Sets the base attitude
 
-        The base attitude is the attitude corresponding to the origin of the scene.
+        The base attitude is the attitude of the scene.
         """
         self.scene.set_attitude(q)
+
+    def set_onboard_attitude(self, attitude):
+        """
+        Set the on-board attitude from telemetry.
+        """
+        self.scene.set_onboard_attitude(attitude)
 
     def set_time(self, t):
         self._time = CxoTime(t)
@@ -488,13 +737,36 @@ class StarPlot(QtW.QWidget):
         self._highlight = agasc_ids
 
     def set_catalog(self, catalog):
+        if (
+            self._catalog is not None
+            and (len(self._catalog) == len(catalog))
+            and (self._catalog.dtype == catalog.dtype)
+            and np.all(self._catalog == catalog)
+        ):
+            return
+        # setting the time might not be exactly right in general, because time can come directly
+        # from telemetry, and the catalog date might be much earlier, but this is needed for the
+        # standard aperoll use case. In telemetry mode, the difference will not matter.
         self.set_time(catalog.date)
         self._catalog = catalog
         self.show_catalog()
 
-    def show_catalog(self):
+    def show_catalog(self, show=True):
         if self._catalog is not None:
             self.scene.add_catalog(self._catalog)
+        self.scene.show_catalog(show)
+
+    def set_alternate_attitude(self, attitude=None):
+        self.scene.set_alternate_attitude(attitude)
+
+    def show_alternate_fov(self, show=True):
+        self.scene.show_alternate_fov(show)
+
+    def show_fov(self, show=True):
+        self.scene.show_fov(show)
+
+    def set_centroids(self, centroids):
+        self.scene.set_centroids(centroids)
 
 
 def main():
