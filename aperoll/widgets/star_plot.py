@@ -788,7 +788,7 @@ class StarPlot(QtW.QWidget):
 
 
 def main():
-    from aperoll.widgets.parameters import get_default_parameters
+    from aperoll.utils import get_default_parameters
 
     params = get_default_parameters()
 

@@ -7,18 +7,18 @@ from PyQt5 import QtWidgets as QtW
 from Quaternion import Quat
 
 from aperoll.proseco_data import ProsecoData
-from aperoll.utils import logger
+from aperoll.utils import (
+    get_default_parameters,
+    get_parameters_from_pickle,
+    get_parameters_from_yoshi,
+    logger,
+)
 from aperoll.widgets.attitude_widget import (
     AttitudeWidget,
     QuatRepresentation,
 )
 from aperoll.widgets.error_message import ErrorMessage
-from aperoll.widgets.parameters import (
-    LineEdit,
-    get_default_parameters,
-    get_parameters_from_pickle,
-    get_parameters_from_yoshi,
-)
+from aperoll.widgets.line_edit import LineEdit
 from aperoll.widgets.proseco_params import ProsecoParams
 from aperoll.widgets.star_plot import StarPlot
 from aperoll.widgets.starcat_review import StarcatReview
