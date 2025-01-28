@@ -157,12 +157,12 @@ class Star(QtW.QGraphicsEllipseItem):
         return (
             "<pre>"
             f"ID:      {self.star['AGASC_ID']}\n"
-            f"mag:     {self.star['MAG_ACA']:.2f} +- {self.star['MAG_ACA_ERR']/100:.2}\n"
+            f"mag:     {self.star['MAG_ACA']:.2f} +- {self.star['MAG_ACA_ERR'] / 100:.2}\n"
             f"color:   {self.star['COLOR1']:.2f}\n"
             f"ASPQ1:   {self.star['ASPQ1']}\n"
             f"ASPQ2:   {self.star['ASPQ2']}\n"
             f"class:   {self.star['CLASS']}\n"
-            f"pos err: {self.star['POS_ERR']/1000} mas\n"
+            f"pos err: {self.star['POS_ERR'] / 1000} mas\n"
             f"VAR:     {self.star['VAR']}"
             "</pre>"
         )
@@ -576,12 +576,7 @@ class FieldOfView(QtW.QGraphicsItem):
         row, col = yagzag_to_pixels(
             self._centroids["YAGS"], self._centroids["ZAGS"], allow_bad=True
         )
-        off_ccd = (
-            (row < -511)
-            | (row > 511)
-            | (col < -511)
-            | (col > 511)
-        )
+        off_ccd = (row < -511) | (row > 511) | (col < -511) | (col > 511)
         for i, centroid in enumerate(self.centroids):
             centroid.set_fiducial(self._centroids["IMGFID"][i])
             if off_ccd[i]:
